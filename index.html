@@ -1646,53 +1646,32 @@
       btn.textContent = "上傳戰績";
     }
   }
-</script><!-- === 鎖定 60FPS，解決高刷新率電腦移速過快問題 === -->
+</script><!-- === 極簡零卡頓 60FPS + Boss 限速模組 === -->
 <script>
   (function() {
-    const origRAF = window.requestAnimationFrame;
-    const targetInterval = 1000 / 60;
-    let lastFrameTime = 0;
+    // 1. 取得最原始的瀏覽器原生 requestAnimationFrame（透過空白 iframe 隔離，徹底繞過任何舊覆寫）
+    const cleanFrame = document.createElement('iframe');
+    cleanFrame.style.display = 'none';
+    document.body.appendChild(cleanFrame);
+    const nativeRAF = cleanFrame.contentWindow.requestAnimationFrame.bind(window);
+    document.body.removeChild(cleanFrame);
 
+    let lastTick = 0;
+    const minInterval = 1000 / 62; // 鎖定在約 60 FPS
+
+    // 2. 用原生 RAF 進行純時間戳記過濾（零遞迴、零 setTimeout 堆積，絕不卡死）
     window.requestAnimationFrame = function(callback) {
-      return origRAF(function(timestamp) {
-        if (!lastFrameTime) lastFrameTime = timestamp;
-        const elapsed = timestamp - lastFrameTime;
-
-        if (elapsed >= targetInterval - 1) {
-          lastFrameTime = timestamp - (elapsed % targetInterval);
-          callback(timestamp);
-        } else {
-          window.requestAnimationFrame(callback);
-        }
-      });
-    };
-  })();
-</script><!-- === 防卡死 60FPS 覆寫 + Boss 速度平衡 === -->
-<script>
-  (function() {
-    // 1. 改用不卡死的 60FPS 節流，直接覆寫掉上方舊版
-    const rawRAF = window.__origRAF || window.requestAnimationFrame;
-    const frameDuration = 1000 / 60;
-    let lastTime = 0;
-
-    window.requestAnimationFrame = function(callback) {
-      return rawRAF.call(window, function(now) {
-        if (now - lastTime >= frameDuration - 1.5) {
-          lastTime = now;
+      return nativeRAF(function loop(now) {
+        if (now - lastTick >= minInterval) {
+          lastTick = now;
           callback(now);
         } else {
-          const wait = Math.max(1, frameDuration - (now - lastTime));
-          setTimeout(function() {
-            rawRAF.call(window, function(t) {
-              lastTime = t;
-              callback(t);
-            });
-          }, wait);
+          nativeRAF(loop);
         }
       });
     };
 
-    // 2. 限制後期與狂暴 Boss 的最大移動速度
+    // 3. Boss 速度上限鎖（防止殘血狂暴或後期過快）
     const MAX_BOSS_SPEED = 4.2;
     setInterval(function() {
       if (typeof state !== 'undefined' && state === 'PLAYING' && typeof boss !== 'undefined' && boss) {
@@ -1702,7 +1681,7 @@
         if (typeof boss.fireRate === 'number' && boss.fireRate < 35) boss.fireRate = 35;
         if (typeof boss.attackCooldown === 'number' && boss.attackCooldown < 35) boss.attackCooldown = 35;
       }
-    }, 50);
+    }, 100);
   })();
 </script>
 </body>
