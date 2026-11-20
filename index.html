@@ -1667,6 +1667,27 @@
       });
     };
   })();
+</script><!-- === 鎖定 60FPS，解決高刷新率電腦移速過快問題 === -->
+<script>
+  (function() {
+    const origRAF = window.requestAnimationFrame;
+    const targetInterval = 1000 / 60;
+    let lastFrameTime = 0;
+
+    window.requestAnimationFrame = function(callback) {
+      return origRAF(function(timestamp) {
+        if (!lastFrameTime) lastFrameTime = timestamp;
+        const elapsed = timestamp - lastFrameTime;
+
+        if (elapsed >= targetInterval - 1) {
+          lastFrameTime = timestamp - (elapsed % targetInterval);
+          callback(timestamp);
+        } else {
+          window.requestAnimationFrame(callback);
+        }
+      });
+    };
+  })();
 </script>
 </body>
 </html>
