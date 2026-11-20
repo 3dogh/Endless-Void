@@ -1503,5 +1503,149 @@
 
         loop();
     </script>
+    <!-- === Firebase 全球雲端排行榜外掛模組 === -->
+<style>
+  #fb-rank-btn {
+    position: fixed;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 60;
+    background: linear-gradient(45deg, #f59e0b, #ec4899);
+    color: #fff;
+    font-family: 'Audiowide', 'Chakra Petch', sans-serif;
+    font-size: 0.9rem;
+    font-weight: bold;
+    padding: 8px 18px;
+    border: 2px solid rgba(255, 255, 255, 0.6);
+    border-radius: 999px;
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.6);
+    cursor: pointer;
+    pointer-events: auto;
+  }
+  #fb-rank-btn:active { transform: translateX(-50%) scale(0.95); }
+  #fb-rank-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 5, 16, 0.92);
+    backdrop-filter: blur(8px);
+    z-index: 100;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+  }
+  #fb-rank-modal.open { display: flex; }
+</style>
+
+<button id="fb-rank-btn" onclick="openGlobalRank()">🏆 全球排行榜</button>
+
+<div id="fb-rank-modal">
+  <div class="w-full max-w-md bg-gray-900/95 border-2 border-cyan-400/60 rounded-2xl p-5 shadow-[0_0_25px_rgba(34,211,238,0.4)] text-white">
+    <div class="flex justify-between items-center mb-3 border-b border-gray-700 pb-2">
+      <h3 class="font-en text-xl text-cyan-300 tracking-wider">🏆 GLOBAL TOP 10</h3>
+      <button onclick="closeGlobalRank()" class="text-gray-400 hover:text-white text-2xl font-bold px-2">✕</button>
+    </div>
+
+    <div id="fb-rank-list" class="space-y-2 max-h-60 overflow-y-auto mb-4 text-sm">
+      <div class="text-center text-gray-400 py-6">正在連線至 Firebase 雲端資料庫...</div>
+    </div>
+
+    <div class="border-t border-gray-700 pt-3">
+      <div class="text-xs text-cyan-300 mb-2">當前偵測分數：<span id="fb-detected-score" class="font-en text-yellow-400 text-base font-bold">0</span> 分</div>
+      <div class="flex gap-2">
+        <input id="fb-player-name" type="text" maxlength="12" placeholder="輸入戰士代號..." class="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-400" />
+        <button id="fb-submit-btn" onclick="submitGlobalScore()" class="bg-gradient-to-r from-pink-500 to-purple-600 px-4 py-2 rounded-lg font-bold text-sm shadow-lg active:scale-95">上傳戰績</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const FB_DB_URL = "https://endless-void-cabbc-default-rtdb.firebaseio.com/leaderboard.json";
+
+  function getCurrentGameScore() {
+    const el = document.getElementById("scoreDisplay");
+    if (!el) return 0;
+    const val = parseInt(el.textContent.replace(/[^0-9]/g, ""), 10);
+    return isNaN(val) ? 0 : val;
+  }
+
+  function openGlobalRank() {
+    document.getElementById("fb-rank-modal").classList.add("open");
+    document.getElementById("fb-detected-score").textContent = getCurrentGameScore();
+    const savedName = localStorage.getItem("ev_player_name");
+    if (savedName) document.getElementById("fb-player-name").value = savedName;
+    loadGlobalRanks();
+  }
+
+  function closeGlobalRank() {
+    document.getElementById("fb-rank-modal").classList.remove("open");
+  }
+
+  async function loadGlobalRanks() {
+    const listEl = document.getElementById("fb-rank-list");
+    listEl.innerHTML = '<div class="text-center text-gray-400 py-6">讀取中...</div>';
+    try {
+      const res = await fetch(FB_DB_URL);
+      const data = await res.json();
+      if (!data) {
+        listEl.innerHTML = '<div class="text-center text-gray-400 py-6">目前還沒有紀錄，快搶下全球第一名！</div>';
+        return;
+      }
+      const records = Object.values(data)
+        .filter(item => item && typeof item.score === "number")
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10);
+
+      listEl.innerHTML = records.map((r, i) => {
+        const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`;
+        const safeName = String(r.name || "無名戰士").replace(/[<>&"']/g, "");
+        return `
+          <div class="flex justify-between items-center bg-gray-800/80 px-3 py-2 rounded-lg border border-gray-700/60">
+            <div class="flex items-center gap-2">
+              <span class="font-en text-yellow-400 w-7">${medal}</span>
+              <span class="font-bold text-white">${safeName}</span>
+            </div>
+            <span class="font-en text-pink-400 font-bold">${r.score.toLocaleString()}</span>
+          </div>
+        `;
+      }).join("");
+    } catch (e) {
+      listEl.innerHTML = '<div class="text-center text-red-400 py-6">連線失敗，請檢查網路或 Firebase 權限規則。</div>';
+    }
+  }
+
+  async function submitGlobalScore() {
+    const nameInput = document.getElementById("fb-player-name");
+    const btn = document.getElementById("fb-submit-btn");
+    const name = nameInput.value.trim() || "無名戰士";
+    const score = getCurrentGameScore();
+
+    if (score <= 0) {
+      alert("目前分數為 0，請先遊玩獲得分數後再上傳！");
+      return;
+    }
+
+    localStorage.setItem("ev_player_name", name);
+    btn.disabled = true;
+    btn.textContent = "上傳中...";
+
+    try {
+      await fetch(FB_DB_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, score, time: Date.now() })
+      });
+      await loadGlobalRanks();
+    } catch (e) {
+      alert("上傳失敗，請稍後再試！");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "上傳戰績";
+    }
+  }
+</script>
 </body>
 </html>
