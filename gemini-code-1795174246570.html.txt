@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>無盡虛空 - Endless Void (全球雲端排行榜模組)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background-color: #050510; color: #fff; font-family: sans-serif; }
+  </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+  <!-- 模擬遊戲結束與排行榜介面 -->
+  <div class="w-full max-w-md bg-slate-900/90 border border-cyan-500/40 rounded-2xl p-6 shadow-2xl">
+    <h1 class="text-2xl font-bold text-center text-cyan-400 mb-2">🏆 全球榮譽排行榜 (Top 5)</h1>
+    <p class="text-xs text-center text-slate-400 mb-4">已連線至 Firebase 雲端，跨設備即時同步</p>
+
+    <!-- 排行榜顯示區 -->
+    <div id="leaderboard-list" class="space-y-2 mb-6 min-h-[180px] flex flex-col justify-center">
+      <p class="text-center text-slate-400 animate-pulse">正在從雲端讀取全球戰績...</p>
+    </div>
+
+    <!-- 模擬提交分數表單 -->
+    <div class="border-t border-slate-700 pt-4 space-y-3">
+      <div class="flex gap-2">
+        <input id="player-name" type="text" maxlength="12" placeholder="輸入你的戰士代號"
+          class="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-400" />
+        <input id="player-score" type="number" placeholder="分數" value="1500"
+          class="w-24 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-400" />
+      </div>
+      <button id="submit-btn" onclick="submitGlobalScore()"
+        class="w-full bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 text-white font-bold py-2.5 rounded-lg transition">
+        上傳戰績至全球榜單
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // 你的專屬 Firebase Realtime Database 網址
+    const FIREBASE_DB_URL = "https://endless-void-cabbc-default-rtdb.firebaseio.com/leaderboard.json";
+
+    // 1. 從雲端讀取全球 Top 5 排行榜 (REST API GET)
+    async function loadGlobalLeaderboard() {
+      const listEl = document.getElementById("leaderboard-list");
+      try {
+        const res = await fetch(FIREBASE_DB_URL);
+        if (!res.ok) throw new Error("網路連線異常");
+        const data = await res.json();
+
+        if (!data) {
+          listEl.innerHTML = `<p class="text-center text-slate-400 text-sm">目前還沒有紀錄，快搶下全球第一名！</p>`;
+          return [];
+        }
+
+        // 將 Firebase 物件轉成陣列並依分數由高到低排序，取前 5 名
+        const scoresArray = Object.values(data)
+          .filter(item => item && typeof item.score === "number")
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 5);
+
+        renderLeaderboard(scoresArray);
+        return scoresArray;
+      } catch (err) {
+        console.error(err);
+        listEl.innerHTML = `<p class="text-center text-rose-400 text-sm">讀取失敗，請檢查網路或資料庫權限</p>`;
+        return [];
+      }
+    }
+
+    // 渲染排行榜畫面
+    function renderLeaderboard(list) {
+      const listEl = document.getElementById("leaderboard-list");
+      const medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"];
+      listEl.innerHTML = list.map((entry, idx) => `
+        <div class="flex items-center justify-between bg-slate-800/80 px-4 py-2.5 rounded-lg border border-slate-700/60">
+          <div class="flex items-center gap-3">
+            <span class="text-lg">${medals[idx] || idx + 1}</span>
+            <span class="font-semibold text-slate-100">${escapeHTML(entry.name)}</span>
+          </div>
+          <span class="font-mono font-bold text-cyan-400">${entry.score.toLocaleString()}</span>
+        </div>
+      `).join("");
+    }
+
+    // 2. 上傳新分數到雲端 (REST API POST)
+    async function submitGlobalScore() {
+      const nameInput = document.getElementById("player-name");
+      const scoreInput = document.getElementById("player-score");
+      const btn = document.getElementById("submit-btn");
+
+      const name = (nameInput.value || "").trim() || "無名戰士";
+      const score = parseInt(scoreInput.value, 10);
+
+      if (isNaN(score) || score <= 0) {
+        alert("請輸入有效分數！");
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "同步至雲端中...";
+
+      try {
+        const res = await fetch(FIREBASE_DB_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: name,
+            score: score,
+            timestamp: Date.now()
+          })
+        });
+
+        if (!res.ok) throw new Error("寫入失敗");
+        nameInput.value = "";
+        await loadGlobalLeaderboard();
+      } catch (err) {
+        alert("上傳失敗，請確認 Firebase 是否開啟測試模式！");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "上傳戰績至全球榜單";
+      }
+    }
+
+    // 防止 XSS 特殊字元注入
+    function escapeHTML(str) {
+      return String(str).replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[m]));
+    }
+
+    // 頁面開啟時自動載入全球榜單
+    loadGlobalLeaderboard();
+  </script>
+</body>
+</html>
