@@ -2006,6 +2006,42 @@
 
     injectStoryButton();
   })();
+</script><!-- === 玩家戰機操控靈敏度與 iPad 移動加速模組 === -->
+<script>
+  (function() {
+    // 偵測是否為 iPad / 平板 / 觸控裝置（iPadOS Safari 預設會偽裝成 MacIntel，需搭配 maxTouchPoints 判斷）
+    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    
+    // 設定戰機移動速度加成倍率（1.5 = 加快 50%，覺得還不夠快可改成 1.8 或 2.0）
+    const SPEED_MULTIPLIER = isTouchDevice ? 1.65 : 1.25;
+    let basePlayerSpeed = null;
+
+    setInterval(function() {
+      if (typeof state !== 'undefined' && state === 'PLAYING' && typeof player !== 'undefined' && player) {
+        // 1. 提高戰機基礎移動速度上限（解決按鍵或虛擬搖桿飛太慢）
+        if (typeof player.speed === 'number') {
+          if (basePlayerSpeed === null) {
+            basePlayerSpeed = player.speed;
+          }
+          const targetSpeed = basePlayerSpeed * SPEED_MULTIPLIER;
+          if (player.speed < targetSpeed) {
+            player.speed = targetSpeed;
+          }
+        }
+
+        // 2. 加快觸控目標點跟隨速度（若遊戲使用 targetX / targetY 平滑追蹤手指）
+        if (isTouchDevice && typeof player.targetX === 'number' && typeof player.x === 'number') {
+          player.x += (player.targetX - player.x) * 0.35;
+          if (typeof player.targetY === 'number' && typeof player.y === 'number') {
+            player.y += (player.targetY - player.y) * 0.35;
+          }
+        }
+      } else if (typeof state !== 'undefined' && (state === 'START' || state === 'GAMEOVER')) {
+        // 結束一局時重置基準速度記錄，避免下一局重複疊加
+        basePlayerSpeed = null;
+      }
+    }, 30);
+  })();
 </script>
 </body>
 </html>
