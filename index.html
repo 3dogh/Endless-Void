@@ -1836,12 +1836,17 @@
       if (isTouch && typeof player !== 'undefined' && player && typeof player.speed === 'number' && player.speed < 9) {
         player.speed = 9;
       }
-        // 偵測遊戲原本的升級選單或暫停畫面是否正在顯示
-      const upgScreen = document.getElementById('upgradeScreen');
-      const isUpgrading = (upgScreen && !upgScreen.classList.contains('hidden')) ||
-                          (typeof state !== 'undefined' && state !== 'PLAYING');
+        // 通用偵測：只要畫面上有升級卡片/彈窗顯示（不論 ID 叫什麼），或遊戲非進行中，立刻凍結隕石
+      const hasVisiblePopup = Array.from(document.querySelectorAll('div')).some(el => {
+        if (el.id === 'stHud' || el.id === 'stModal' || el.id === 'startScreen' || el.id === 'gameOverScreen') return false;
+        const style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+        const txt = el.textContent || '';
+        return (txt.includes('UPGRADE') || txt.includes('升級') || txt.includes('SELECT') || txt.includes('選擇')) && el.offsetWidth > 150 && el.offsetHeight > 150;
+      });
+      const isGamePaused = (typeof state !== 'undefined' && state !== 'PLAYING') || hasVisiblePopup;
 
-      if (isStoryActive && !isModalOpen && !isUpgrading) {
+      if (isStoryActive && !isModalOpen && !isGamePaused) {
         frame++;
         const ch = STORY_CHAPTERS[chIdx];
         const px = (typeof player !== 'undefined' && player && typeof player.x === 'number') ? player.x : pointerX;
