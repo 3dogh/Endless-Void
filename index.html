@@ -1695,415 +1695,6 @@
 
     setInterval(function() {
       if (typeof state !== 'undefined' && state === 'PLAYING' && typeof player !== 'undefined' && player) {
-</script><!-- === 星際遠征：故事模式外掛模組 v5（鎖定故事模式・防誤跳無盡模式） === -->
-<script>
-  (function() {
-    const STORY_CHAPTERS = [
-      {
-        id: 1,
-        title: "第一章：邊境警戒線",
-        needKills: 30,
-        speaker: "艦隊總部・艾琳娜指揮官",
-        avatar: "👩‍🚀",
-        intro: "「指揮官，第 7 星區邊境湧現大量虛空先遣艦隊！請堅守防線，擊破 30 架敵機以建立前線據點！」",
-        outro: "「漂亮的防守！先遣艦隊已被全數殲滅，但雷達深處出現了更強大的敵軍訊號……」",
-        fail: "「戰機受損過重，防線已被突破！請重整旗鼓，再次挑戰清除邊境敵軍！」"
-      },
-      {
-        id: 2,
-        title: "第二章：小行星伏擊戰",
-        needKills: 75,
-        speaker: "情報官・凱爾",
-        avatar: "📡",
-        intro: "「警告！前方小行星帶隱藏了敵軍重裝火力網。請善用升級強化戰機，累計擊破 75 架敵機！」",
-        outro: "「成功突破封鎖線！我們已經逼近虛空艦隊的外圍核心區了。」",
-        fail: "「小行星帶的交叉火力太猛烈了……優先升級護盾與射速再試一次吧！」"
-      },
-      {
-        id: 3,
-        title: "第三章：深空巨獸",
-        needKills: 130,
-        speaker: "虛空先鋒・薩羅斯",
-        avatar: "👾",
-        intro: "「渺小的人類戰機，竟敢踏入無盡虛空……見識一下深空母艦的真正威力吧！（目標：累計擊破 130 架敵機）」",
-        outro: "「不可能……我的裝甲竟然被擊穿了！但真正的主宰正在核心深處等著你……」",
-        fail: "「哈哈哈哈！就憑這點火力也想挑戰深空艦隊？回去再練練吧！」"
-      },
-      {
-        id: 4,
-        title: "第四章：核心反應爐",
-        needKills: 200,
-        speaker: "艦隊總部・艾琳娜指揮官",
-        avatar: "👩‍🚀",
-        intro: "「我們已抵達敵軍能源中樞！敵方火力進入狂暴狀態，務必累計擊破 200 架敵機切斷核心能源！」",
-        outro: "「核心反應爐已過載爆炸！通往最終王座的航道已經開啟！」",
-        fail: "「能源中樞的防衛系統太強大了，戰機已被迫緊急撤離！」"
-      },
-      {
-        id: 5,
-        title: "終章：無盡虛空之主",
-        needKills: 300,
-        speaker: "虛空主宰・歐米茄",
-        avatar: "👁️",
-        intro: "「一切終將歸於虛無。來吧，指揮官，在最終決戰中證明人類的意志！（最終目標：累計擊破 300 架敵機）」",
-        outro: "「虛空裂縫已經閉合，銀河系恢復了和平！恭喜你完成《無盡虛空》全部故事章節！」",
-        fail: "「在無盡虛空面前，一切抵抗都是徒勞……準備好再戰一次了嗎？」"
-      }
-    ];
-
-    const STORY_SAVE_KEY = "endless_void_story_progress_v5";
-    let isStoryMode = false;
-    let isBriefingOpen = false; // 標記正在看劇情簡報，防止狀態被誤重置
-    let currentChapterIndex = 0;
-    let chapterClearedTriggered = false;
-    let chapterFailedTriggered = false;
-    let totalStoryKills = 0;
-    let lastScore = 0;
-
-    function getUnlockedChapter() {
-      try {
-        const saved = parseInt(localStorage.getItem(STORY_SAVE_KEY) || "1", 10);
-        return isNaN(saved) ? 1 : Math.min(STORY_CHAPTERS.length, Math.max(1, saved));
-      } catch (e) {
-        return 1;
-      }
-    }
-
-    function saveUnlockedChapter(chNum) {
-      try {
-        if (chNum > getUnlockedChapter()) {
-          localStorage.setItem(STORY_SAVE_KEY, String(Math.min(STORY_CHAPTERS.length, chNum)));
-        }
-      } catch (e) {}
-    }
-
-    const styleEl = document.createElement("style");
-    styleEl.textContent = `
-      #storyOverlay, #storyChapterModal, #storyFailModal {
-        position: fixed; inset: 0; background: rgba(4, 8, 20, 0.9);
-        display: flex; align-items: center; justify-content: center;
-        z-index: 9999; font-family: system-ui, -apple-system, sans-serif; color: #fff;
-        backdrop-filter: blur(6px);
-      }
-      #storyOverlay.hidden, #storyChapterModal.hidden, #storyFailModal.hidden, #storyHudBadge.hidden { display: none !important; }
-      .story-box {
-        width: 90%; max-width: 460px; background: linear-gradient(145deg, #0d172a, #162447);
-        border: 2px solid #00f0ff; border-radius: 14px; padding: 20px;
-        box-shadow: 0 0 28px rgba(0, 240, 255, 0.35); text-align: left;
-      }
-      .story-box.fail-theme {
-        background: linear-gradient(145deg, #240b12, #3b0d18);
-        border-color: #ff3b5c;
-        box-shadow: 0 0 32px rgba(255, 59, 92, 0.45);
-      }
-      .story-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-      .story-avatar {
-        font-size: 32px; background: rgba(0, 240, 255, 0.15); border: 1px solid #00f0ff;
-        border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;
-      }
-      .fail-theme .story-avatar { background: rgba(255, 59, 92, 0.2); border-color: #ff3b5c; }
-      .story-title { font-size: 13px; color: #00f0ff; font-weight: bold; }
-      .fail-theme .story-title { color: #ff6b81; }
-      .story-speaker { font-size: 16px; font-weight: bold; color: #fff; margin-top: 2px; }
-      .story-text {
-        font-size: 15px; line-height: 1.6; color: #dbeafe; background: rgba(0, 0, 0, 0.38);
-        padding: 13px; border-radius: 8px; border-left: 3px solid #00f0ff; margin-bottom: 14px;
-      }
-      .fail-theme .story-text { color: #ffe4e6; border-left-color: #ff3b5c; }
-      .story-btn {
-        width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 16px;
-        font-weight: bold; cursor: pointer; background: linear-gradient(90deg, #00c6ff, #0072ff);
-        color: #fff; margin-top: 8px;
-      }
-      .story-btn.retry-btn { background: linear-gradient(90deg, #ff416c, #ff4b2b); }
-      .story-btn.secondary-btn { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.25); font-size: 14px; }
-      .chapter-item {
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 11px 14px; margin-bottom: 9px; border-radius: 8px;
-        background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(0, 240, 255, 0.3);
-        cursor: pointer;
-      }
-      .chapter-item.locked { opacity: 0.45; cursor: not-allowed; border-color: #475569; }
-      #storyHudBadge {
-        position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
-        background: rgba(13, 23, 42, 0.92); border: 1px solid #00f0ff; color: #00f0ff;
-        padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: bold;
-        z-index: 9000; pointer-events: none; white-space: nowrap;
-      }
-    `;
-    document.head.appendChild(styleEl);
-
-    const hudBadge = document.createElement("div");
-    hudBadge.id = "storyHudBadge";
-    hudBadge.className = "hidden";
-    document.body.appendChild(hudBadge);
-
-    const storyOverlay = document.createElement("div");
-    storyOverlay.id = "storyOverlay";
-    storyOverlay.className = "hidden";
-    storyOverlay.innerHTML = `
-      <div class="story-box">
-        <div class="story-header">
-          <div class="story-avatar" id="storyAvatar">👩‍🚀</div>
-          <div>
-            <div class="story-title" id="storyChapterTitle">第一章</div>
-            <div class="story-speaker" id="storySpeaker">艦隊總部</div>
-          </div>
-        </div>
-        <div class="story-text" id="storyDialogueText"></div>
-        <button class="story-btn" id="storyActionBtn">開始出擊 🚀</button>
-      </div>
-    `;
-    document.body.appendChild(storyOverlay);
-
-    const storyFailModal = document.createElement("div");
-    storyFailModal.id = "storyFailModal";
-    storyFailModal.className = "hidden";
-    storyFailModal.innerHTML = `
-      <div class="story-box fail-theme">
-        <div class="story-header">
-          <div class="story-avatar">💥</div>
-          <div>
-            <div class="story-title" id="failChapterTitle">任務失敗・MISSION FAILED</div>
-            <div class="story-speaker" id="failSpeaker">戰機已墜毀</div>
-          </div>
-        </div>
-        <div class="story-text" id="failDialogueText"></div>
-        <div id="failProgressStat" style="font-size:14px; color:#fda4af; font-weight:bold; margin-bottom:12px; text-align:center;"></div>
-        <button class="story-btn retry-btn" id="storyRetryBtn">🔄 重新挑戰本章</button>
-        <button class="story-btn secondary-btn" id="storyBackMenuBtn">🏠 返回主選單</button>
-      </div>
-    `;
-    document.body.appendChild(storyFailModal);
-
-    const chapterModal = document.createElement("div");
-    chapterModal.id = "storyChapterModal";
-    chapterModal.className = "hidden";
-    chapterModal.innerHTML = `
-      <div class="story-box">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-          <div style="font-size:18px; font-weight:bold; color:#00f0ff;">📖 星際遠征：選擇章節</div>
-          <button id="closeStoryModalBtn" style="background:none; border:none; color:#94a3b8; font-size:20px; cursor:pointer;">✕</button>
-        </div>
-        <div id="storyChapterList"></div>
-      </div>
-    `;
-    document.body.appendChild(chapterModal);
-
-    function injectStoryButton() {
-      if (document.getElementById("openStoryModeBtn")) return;
-      const startScreen = document.getElementById("startScreen");
-      if (!startScreen) return;
-
-      const btn = document.createElement("button");
-      btn.id = "openStoryModeBtn";
-      btn.textContent = "📖 故事模式 / STORY MODE";
-      btn.style.cssText = `
-        display: block; width: 260px; margin: 12px auto; padding: 12px 18px;
-        font-size: 16px; font-weight: bold; color: #fff; cursor: pointer;
-        background: linear-gradient(90deg, #7928ca, #ff0080);
-        border: 2px solid rgba(255,255,255,0.4); border-radius: 10px;
-        box-shadow: 0 0 18px rgba(255, 0, 128, 0.45); letter-spacing: 1px;
-      `;
-      btn.onclick = (e) => {
-        e.stopPropagation();
-        openChapterSelect();
-      };
-
-      const firstBtn = startScreen.querySelector("button");
-      if (firstBtn && firstBtn.parentNode) {
-        firstBtn.parentNode.insertBefore(btn, firstBtn.nextSibling);
-      } else {
-        startScreen.appendChild(btn);
-      }
-    }
-
-    function openChapterSelect() {
-      const listEl = document.getElementById("storyChapterList");
-      const unlocked = getUnlockedChapter();
-      listEl.innerHTML = "";
-
-      STORY_CHAPTERS.forEach((ch, idx) => {
-        const isLocked = ch.id > unlocked;
-        const item = document.createElement("div");
-        item.className = "chapter-item" + (isLocked ? " locked" : "");
-        item.innerHTML = `
-          <div>
-            <div style="font-weight:bold; font-size:15px;">${isLocked ? "🔒 " : "🚀 "}${ch.title}</div>
-            <div style="font-size:12px; color:#94a3b8; margin-top:3px;">任務目標：累計擊破 ${ch.needKills} 架敵機</div>
-          </div>
-          <div style="font-size:13px; color:${isLocked ? '#64748b' : '#00f0ff'}; font-weight:bold;">
-            ${isLocked ? "未解鎖" : (ch.id < unlocked ? "已通關 ★" : "出擊 ▶")}
-          </div>
-        `;
-        if (!isLocked) {
-          item.onclick = (e) => {
-            e.stopPropagation();
-            chapterModal.classList.add("hidden");
-            launchStoryMode(idx);
-          };
-        }
-        listEl.appendChild(item);
-      });
-
-      chapterModal.classList.remove("hidden");
-    }
-
-    document.getElementById("closeStoryModalBtn").onclick = (e) => {
-      e.stopPropagation();
-      chapterModal.classList.add("hidden");
-    };
-
-    function showBriefing(ch, isOutro, onConfirm) {
-      isBriefingOpen = true;
-      document.getElementById("storyAvatar").textContent = ch.avatar;
-      document.getElementById("storyChapterTitle").textContent = ch.title;
-      document.getElementById("storySpeaker").textContent = ch.speaker;
-      document.getElementById("storyDialogueText").textContent = isOutro ? ch.outro : ch.intro;
-
-      const actionBtn = document.getElementById("storyActionBtn");
-      actionBtn.textContent = isOutro
-        ? (ch.id < STORY_CHAPTERS.length ? "繼續下一章戰役 ▶" : "凱旋返回主選單 🏆")
-        : "開始出擊 🚀";
-
-      storyOverlay.classList.remove("hidden");
-      actionBtn.onclick = (e) => {
-        e.stopPropagation();
-        storyOverlay.classList.add("hidden");
-        isBriefingOpen = false;
-        onConfirm();
-      };
-    }
-
-    function showFailScreen(ch) {
-      hudBadge.classList.add("hidden");
-      const gameOverScreen = document.getElementById("gameOverScreen");
-      if (gameOverScreen) gameOverScreen.classList.add("hidden");
-
-      document.getElementById("failChapterTitle").textContent = `❌ 任務失敗｜${ch.title}`;
-      document.getElementById("failSpeaker").textContent = ch.speaker;
-      document.getElementById("failDialogueText").textContent = ch.fail;
-      document.getElementById("failProgressStat").textContent = `未達成目標：擊破進度 ${totalStoryKills} / ${ch.needKills} 架`;
-
-      storyFailModal.classList.remove("hidden");
-
-      document.getElementById("storyRetryBtn").onclick = (e) => {
-        e.stopPropagation();
-        storyFailModal.classList.add("hidden");
-        launchStoryMode(currentChapterIndex);
-      };
-
-      document.getElementById("storyBackMenuBtn").onclick = (e) => {
-        e.stopPropagation();
-        storyFailModal.classList.add("hidden");
-        isStoryMode = false;
-        isBriefingOpen = false;
-        if (typeof state !== "undefined") state = "START";
-        const startScreen = document.getElementById("startScreen");
-        if (startScreen) startScreen.classList.remove("hidden");
-      };
-    }
-
-    function launchStoryMode(idx) {
-      isStoryMode = true;
-      isBriefingOpen = true;
-      currentChapterIndex = idx;
-      chapterClearedTriggered = false;
-      chapterFailedTriggered = false;
-      totalStoryKills = idx === 0 ? 0 : STORY_CHAPTERS[idx - 1].needKills;
-      lastScore = 0;
-
-      // 立刻隱藏主選單，防止狀態被重置
-      const startScreen = document.getElementById("startScreen");
-      if (startScreen) startScreen.classList.add("hidden");
-
-      const ch = STORY_CHAPTERS[idx];
-      showBriefing(ch, false, () => {
-        isStoryMode = true; // 再次確保為故事模式
-        if (typeof startGame === "function") {
-          startGame();
-        }
-        hudBadge.textContent = `${ch.title}｜擊破進度：${totalStoryKills} / ${ch.needKills}`;
-        hudBadge.classList.remove("hidden");
-      });
-    }
-
-    // 只有當玩家真正點擊原本的「開始遊戲 / 難度」按鈕時，才切換為無盡模式
-    document.addEventListener("click", (e) => {
-      const clickedStartBtn = e.target && e.target.closest("#startScreen button");
-      if (clickedStartBtn && clickedStartBtn.id !== "openStoryModeBtn" && !isBriefingOpen) {
-        isStoryMode = false;
-        hudBadge.classList.add("hidden");
-      }
-    }, true);
-
-    setInterval(() => {
-      injectStoryButton();
-
-      if (!isStoryMode) {
-        hudBadge.classList.add("hidden");
-        return;
-      }
-
-      // 正在看簡報或失敗畫面時，不執行退回主選單檢查
-      if (isBriefingOpen || !storyFailModal.classList.contains("hidden")) {
-        return;
-      }
-
-      if (typeof state !== "undefined") {
-        const ch = STORY_CHAPTERS[currentChapterIndex];
-
-        const isPlayerDead = (state === "GAMEOVER") || (typeof player !== "undefined" && player && typeof player.hp === "number" && player.hp <= 0);
-        if (isPlayerDead && !chapterClearedTriggered && !chapterFailedTriggered) {
-          chapterFailedTriggered = true;
-          showFailScreen(ch);
-          return;
-        }
-
-        if (state === "PLAYING" && storyOverlay.classList.contains("hidden")) {
-          if (typeof score === "number" && score > lastScore) {
-            totalStoryKills += 1;
-            lastScore = score;
-          }
-
-          hudBadge.textContent = `${ch.title}｜擊破進度：${totalStoryKills} / ${ch.needKills}`;
-
-          if (totalStoryKills >= ch.needKills && !chapterClearedTriggered) {
-            chapterClearedTriggered = true;
-            saveUnlockedChapter(ch.id + 1);
-            if (typeof SoundEngine !== "undefined" && SoundEngine.playUpgrade) {
-              SoundEngine.playUpgrade();
-            }
-
-            const prevHp = (typeof player !== "undefined" && player) ? player.hp : null;
-            const guardTimer = setInterval(() => {
-              if (prevHp !== null && typeof player !== "undefined" && player) {
-                player.hp = prevHp;
-              }
-            }, 50);
-
-            showBriefing(ch, true, () => {
-              clearInterval(guardTimer);
-              if (currentChapterIndex + 1 < STORY_CHAPTERS.length) {
-                currentChapterIndex += 1;
-                chapterClearedTriggered = false;
-                const nextCh = STORY_CHAPTERS[currentChapterIndex];
-                hudBadge.textContent = `${nextCh.title}｜擊破進度：${totalStoryKills} / ${nextCh.needKills}`;
-              } else {
-                isStoryMode = false;
-                hudBadge.classList.add("hidden");
-                state = "START";
-                const startScreen = document.getElementById("startScreen");
-                if (startScreen) startScreen.classList.remove("hidden");
-              }
-            });
-          }
-        }
-      }
-    }, 200);
-
-    injectStoryButton();
-  })();
 </script><!-- === iPad 專屬流暢高幀率優化模組 (FPS Booster) === -->
 <script>
   (function() {
@@ -2146,6 +1737,675 @@
         particles.splice(0, particles.length - 60);
       }
     }, 100);
+  })();
+</script><!-- === 星際遠征：故事模式外掛模組 v6（獨立關卡機制・專屬Boss・限時生存版） === -->
+<script>
+  (function() {
+    const STORY_CHAPTERS = [
+      {
+        id: 1,
+        title: "第一章：邊境警戒線",
+        modeType: "METEOR_STORM", // 專屬機制：隕石暴雨 + 擊殺目標
+        needKills: 25,
+        speaker: "艦隊總部・艾琳娜指揮官",
+        avatar: "👩‍🚀",
+        intro: "「指揮官，第 7 星區正遭遇【隕石暴雨】與虛空先遣隊雙重夾擊！小心閃避赤紅隕石，並擊破 25 架敵機！」",
+        outro: "「漂亮的閃避！隕石帶與先遣隊已全數清除，但前方小行星區偵測到異常重力場……」",
+        fail: "「戰機在隕石雨中受損過重！注意觀察紅色預警軌跡，再試一次！」"
+      },
+      {
+        id: 2,
+        title: "第二章：小行星伏擊戰",
+        modeType: "SOLAR_WIND", // 專屬機制：太陽風氣流牽引 + 火力過載支援
+        needKills: 45,
+        speaker: "情報官・凱爾",
+        avatar: "📡",
+        intro: "「本星區存在強烈【太陽風氣流】會推動機身！總部已為你開啟武器超載支援，請在氣流中擊破 45 架敵機！」",
+        outro: "「成功突破引力漩渦！警告——前方雷達出現超巨型戰艦熱源！」",
+        fail: "「太陽風干擾了飛行姿態……順著氣流微調方向，再次突圍吧！」"
+      },
+      {
+        id: 3,
+        title: "第三章：深空巨獸",
+        modeType: "STORY_BOSS_1", // 專屬機制：故事專屬巨型母艦 BOSS 戰
+        bossName: "虛空巨獸・薩羅斯母艦",
+        bossMaxHp: 1200,
+        speaker: "虛空先鋒・薩羅斯",
+        avatar: "👾",
+        intro: "「渺小的人類戰機！見識一下【薩羅斯巨型母艦】的毀滅彈幕吧！（目標：摧毀專屬母艦 BOSS）」",
+        outro: "「不可能……核心裝甲竟然被擊穿了！但真正的主宰正在反應爐深處等著你……」",
+        fail: "「在薩羅斯母艦的扇形砲火面前，人類戰機根本不堪一擊！」"
+      },
+      {
+        id: 4,
+        title: "第四章：核心反應爐",
+        modeType: "SURVIVAL_60S", // 專屬機制：限時生存 60 秒 + 雷射掃射區
+        surviveSeconds: 60,
+        speaker: "艦隊總部・艾琳娜指揮官",
+        avatar: "👩‍🚀",
+        intro: "「我們已抵達敵軍能源中樞！反應爐每 10 秒會釋放【高能雷射網】，請躲開紅色警告區並撐過 60 秒！」",
+        outro: "「核心反應爐已過載引爆！通往最終王座的航道已經開啟！」",
+        fail: "「沒能撐過反應爐的高能脈衝……看準紅色警告區提前閃避！」"
+      },
+      {
+        id: 5,
+        title: "終章：無盡虛空之主",
+        modeType: "FINAL_BOSS", // 專屬機制：雙形態最終魔王決戰
+        bossName: "無盡虛空之主・歐米茄",
+        bossMaxHp: 2200,
+        speaker: "虛空主宰・歐米茄",
+        avatar: "👁️",
+        intro: "「一切終將歸於虛無。來吧，指揮官，見證【虛空之主】的最終形態！（最終決戰：擊敗歐米茄）」",
+        outro: "「虛空裂縫已經徹底閉合，銀河系恢復了和平！恭喜你完成《無盡虛空》全部故事戰役！」",
+        fail: "「在無盡虛空之主面前，一切抵抗都是徒勞……重整戰機再戰一次吧！」"
+      }
+    ];
+
+    const STORY_SAVE_KEY = "endless_void_story_progress_v6";
+    let isStoryMode = false;
+    let isBriefingOpen = false;
+    let currentChapterIndex = 0;
+    let chapterClearedTriggered = false;
+    let chapterFailedTriggered = false;
+
+    // 專屬關卡狀態變數
+    let chapterKills = 0;
+    let lastScore = 0;
+    let chapterStartTime = 0;
+    let hazards = []; // 隕石、雷射區
+    let storyBoss = null; // 故事模式專屬 Boss
+    let storyBossBullets = [];
+
+    function getUnlockedChapter() {
+      try {
+        const saved = parseInt(localStorage.getItem(STORY_SAVE_KEY) || "1", 10);
+        return isNaN(saved) ? 1 : Math.min(STORY_CHAPTERS.length, Math.max(1, saved));
+      } catch (e) { return 1; }
+    }
+
+    function saveUnlockedChapter(chNum) {
+      try {
+        if (chNum > getUnlockedChapter()) {
+          localStorage.setItem(STORY_SAVE_KEY, String(Math.min(STORY_CHAPTERS.length, chNum)));
+        }
+      } catch (e) {}
+    }
+
+    // 1. 建立故事模式專屬透明覆蓋畫布（用來畫隕石、雷射警告區、故事專屬大 Boss 與血條）
+    const fxCanvas = document.createElement("canvas");
+    fxCanvas.id = "storyFxCanvas";
+    fxCanvas.style.cssText = "position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:8500;";
+    document.body.appendChild(fxCanvas);
+    const fxCtx = fxCanvas.getContext("2d");
+
+    function resizeFxCanvas() {
+      fxCanvas.width = window.innerWidth;
+      fxCanvas.height = window.innerHeight;
+    }
+    window.addEventListener("resize", resizeFxCanvas);
+    resizeFxCanvas();
+
+    // 2. UI 樣式與視窗
+    const styleEl = document.createElement("style");
+    styleEl.textContent = `
+      #storyOverlay, #storyChapterModal, #storyFailModal {
+        position: fixed; inset: 0; background: rgba(4, 8, 20, 0.9);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 9999; font-family: system-ui, -apple-system, sans-serif; color: #fff;
+      }
+      #storyOverlay.hidden, #storyChapterModal.hidden, #storyFailModal.hidden, #storyHudBadge.hidden { display: none !important; }
+      .story-box {
+        width: 90%; max-width: 460px; background: linear-gradient(145deg, #0d172a, #162447);
+        border: 2px solid #00f0ff; border-radius: 14px; padding: 20px; text-align: left;
+      }
+      .story-box.fail-theme { background: linear-gradient(145deg, #240b12, #3b0d18); border-color: #ff3b5c; }
+      .story-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+      .story-avatar {
+        font-size: 32px; background: rgba(0, 240, 255, 0.15); border: 1px solid #00f0ff;
+        border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;
+      }
+      .fail-theme .story-avatar { background: rgba(255, 59, 92, 0.2); border-color: #ff3b5c; }
+      .story-title { font-size: 13px; color: #00f0ff; font-weight: bold; }
+      .fail-theme .story-title { color: #ff6b81; }
+      .story-speaker { font-size: 16px; font-weight: bold; color: #fff; margin-top: 2px; }
+      .story-text {
+        font-size: 15px; line-height: 1.6; color: #dbeafe; background: rgba(0, 0, 0, 0.4);
+        padding: 13px; border-radius: 8px; border-left: 3px solid #00f0ff; margin-bottom: 14px;
+      }
+      .fail-theme .story-text { color: #ffe4e6; border-left-color: #ff3b5c; }
+      .story-btn {
+        width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 16px;
+        font-weight: bold; cursor: pointer; background: linear-gradient(90deg, #00c6ff, #0072ff);
+        color: #fff; margin-top: 8px;
+      }
+      .story-btn.retry-btn { background: linear-gradient(90deg, #ff416c, #ff4b2b); }
+      .story-btn.secondary-btn { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.25); font-size: 14px; }
+      .chapter-item {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 11px 14px; margin-bottom: 9px; border-radius: 8px;
+        background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(0, 240, 255, 0.3); cursor: pointer;
+      }
+      .chapter-item.locked { opacity: 0.45; cursor: not-allowed; border-color: #475569; }
+      #storyHudBadge {
+        position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+        background: rgba(13, 23, 42, 0.92); border: 1px solid #00f0ff; color: #00f0ff;
+        padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: bold;
+        z-index: 9000; pointer-events: none; white-space: nowrap;
+      }
+    `;
+    document.head.appendChild(styleEl);
+
+    const hudBadge = document.createElement("div");
+    hudBadge.id = "storyHudBadge";
+    hudBadge.className = "hidden";
+    document.body.appendChild(hudBadge);
+
+    const storyOverlay = document.createElement("div");
+    storyOverlay.id = "storyOverlay";
+    storyOverlay.className = "hidden";
+    storyOverlay.innerHTML = `
+      <div class="story-box">
+        <div class="story-header">
+          <div class="story-avatar" id="storyAvatar">👩‍🚀</div>
+          <div>
+            <div class="story-title" id="storyChapterTitle">第一章</div>
+            <div class="story-speaker" id="storySpeaker">艦隊總部</div>
+          </div>
+        </div>
+        <div class="story-text" id="storyDialogueText"></div>
+        <button class="story-btn" id="storyActionBtn">開始出擊 🚀</button>
+      </div>
+    `;
+    document.body.appendChild(storyOverlay);
+
+    const storyFailModal = document.createElement("div");
+    storyFailModal.id = "storyFailModal";
+    storyFailModal.className = "hidden";
+    storyFailModal.innerHTML = `
+      <div class="story-box fail-theme">
+        <div class="story-header">
+          <div class="story-avatar">💥</div>
+          <div>
+            <div class="story-title" id="failChapterTitle">任務失敗</div>
+            <div class="story-speaker" id="failSpeaker">戰機已墜毀</div>
+          </div>
+        </div>
+        <div class="story-text" id="failDialogueText"></div>
+        <div id="failProgressStat" style="font-size:14px; color:#fda4af; font-weight:bold; margin-bottom:12px; text-align:center;"></div>
+        <button class="story-btn retry-btn" id="storyRetryBtn">🔄 重新挑戰本章</button>
+        <button class="story-btn secondary-btn" id="storyBackMenuBtn">🏠 返回主選單</button>
+      </div>
+    `;
+    document.body.appendChild(storyFailModal);
+
+    const chapterModal = document.createElement("div");
+    chapterModal.id = "storyChapterModal";
+    chapterModal.className = "hidden";
+    chapterModal.innerHTML = `
+      <div class="story-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <div style="font-size:18px; font-weight:bold; color:#00f0ff;">📖 星際遠征：獨立戰役章節</div>
+          <button id="closeStoryModalBtn" style="background:none; border:none; color:#94a3b8; font-size:20px; cursor:pointer;">✕</button>
+        </div>
+        <div id="storyChapterList"></div>
+      </div>
+    `;
+    document.body.appendChild(chapterModal);
+
+    function injectStoryButton() {
+      if (document.getElementById("openStoryModeBtn")) return;
+      const startScreen = document.getElementById("startScreen");
+      if (!startScreen) return;
+
+      const btn = document.createElement("button");
+      btn.id = "openStoryModeBtn";
+      btn.textContent = "📖 故事戰役 / STORY MODE";
+      btn.style.cssText = `
+        display: block; width: 260px; margin: 12px auto; padding: 12px 18px;
+        font-size: 16px; font-weight: bold; color: #fff; cursor: pointer;
+        background: linear-gradient(90deg, #7928ca, #ff0080);
+        border: 2px solid rgba(255,255,255,0.4); border-radius: 10px; letter-spacing: 1px;
+      `;
+      btn.onclick = (e) => { e.stopPropagation(); openChapterSelect(); };
+
+      const firstBtn = startScreen.querySelector("button");
+      if (firstBtn && firstBtn.parentNode) {
+        firstBtn.parentNode.insertBefore(btn, firstBtn.nextSibling);
+      } else {
+        startScreen.appendChild(btn);
+      }
+    }
+
+    function openChapterSelect() {
+      const listEl = document.getElementById("storyChapterList");
+      const unlocked = getUnlockedChapter();
+      listEl.innerHTML = "";
+
+      const modeLabels = {
+        METEOR_STORM: "特殊環境：隕石暴雨｜擊破 25 架敵機",
+        SOLAR_WIND: "特殊環境：太陽風磁場｜擊破 45 架敵機",
+        STORY_BOSS_1: "專屬首領戰：摧毀薩羅斯巨型母艦",
+        SURVIVAL_60S: "限時生存戰：高能雷射網撐過 60 秒",
+        FINAL_BOSS: "最終決戰：擊敗雙形態虛空之主"
+      };
+
+      STORY_CHAPTERS.forEach((ch, idx) => {
+        const isLocked = ch.id > unlocked;
+        const item = document.createElement("div");
+        item.className = "chapter-item" + (isLocked ? " locked" : "");
+        item.innerHTML = `
+          <div>
+            <div style="font-weight:bold; font-size:15px;">${isLocked ? "🔒 " : "🚀 "}${ch.title}</div>
+            <div style="font-size:12px; color:#38bdf8; margin-top:3px;">${modeLabels[ch.modeType]}</div>
+          </div>
+          <div style="font-size:13px; color:${isLocked ? '#64748b' : '#00f0ff'}; font-weight:bold;">
+            ${isLocked ? "未解鎖" : (ch.id < unlocked ? "已通關 ★" : "出擊 ▶")}
+          </div>
+        `;
+        if (!isLocked) {
+          item.onclick = (e) => {
+            e.stopPropagation();
+            chapterModal.classList.add("hidden");
+            launchStoryMode(idx);
+          };
+        }
+        listEl.appendChild(item);
+      });
+
+      chapterModal.classList.remove("hidden");
+    }
+
+    document.getElementById("closeStoryModalBtn").onclick = (e) => {
+      e.stopPropagation();
+      chapterModal.classList.add("hidden");
+    };
+
+    function showBriefing(ch, isOutro, onConfirm) {
+      isBriefingOpen = true;
+      document.getElementById("storyAvatar").textContent = ch.avatar;
+      document.getElementById("storyChapterTitle").textContent = ch.title;
+      document.getElementById("storySpeaker").textContent = ch.speaker;
+      document.getElementById("storyDialogueText").textContent = isOutro ? ch.outro : ch.intro;
+
+      const actionBtn = document.getElementById("storyActionBtn");
+      actionBtn.textContent = isOutro
+        ? (ch.id < STORY_CHAPTERS.length ? "進入下一章戰役 ▶" : "凱旋返回主選單 🏆")
+        : "開始出擊 🚀";
+
+      storyOverlay.classList.remove("hidden");
+      actionBtn.onclick = (e) => {
+        e.stopPropagation();
+        storyOverlay.classList.add("hidden");
+        isBriefingOpen = false;
+        onConfirm();
+      };
+    }
+
+    function showFailScreen(ch, reasonText) {
+      hudBadge.classList.add("hidden");
+      hazards = [];
+      storyBoss = null;
+      storyBossBullets = [];
+      const gameOverScreen = document.getElementById("gameOverScreen");
+      if (gameOverScreen) gameOverScreen.classList.add("hidden");
+
+      document.getElementById("failChapterTitle").textContent = `❌ 任務失敗｜${ch.title}`;
+      document.getElementById("failSpeaker").textContent = ch.speaker;
+      document.getElementById("failDialogueText").textContent = ch.fail;
+      document.getElementById("failProgressStat").textContent = reasonText;
+
+      storyFailModal.classList.remove("hidden");
+
+      document.getElementById("storyRetryBtn").onclick = (e) => {
+        e.stopPropagation();
+        storyFailModal.classList.add("hidden");
+        launchStoryMode(currentChapterIndex);
+      };
+
+      document.getElementById("storyBackMenuBtn").onclick = (e) => {
+        e.stopPropagation();
+        storyFailModal.classList.add("hidden");
+        isStoryMode = false;
+        isBriefingOpen = false;
+        if (typeof state !== "undefined") state = "START";
+        const startScreen = document.getElementById("startScreen");
+        if (startScreen) startScreen.classList.remove("hidden");
+      };
+    }
+
+    function setupChapterMechanics(ch) {
+      chapterKills = 0;
+      lastScore = 0;
+      chapterStartTime = Date.now();
+      hazards = [];
+      storyBoss = null;
+      storyBossBullets = [];
+
+      // 若是 Boss 戰章節，生成專屬巨型故事 Boss
+      if (ch.modeType === "STORY_BOSS_1" || ch.modeType === "FINAL_BOSS") {
+        storyBoss = {
+          x: fxCanvas.width / 2,
+          y: 130,
+          vx: ch.modeType === "FINAL_BOSS" ? 2.8 : 2.0,
+          radius: ch.modeType === "FINAL_BOSS" ? 56 : 48,
+          hp: ch.bossMaxHp,
+          maxHp: ch.bossMaxHp,
+          name: ch.bossName,
+          isFinal: ch.modeType === "FINAL_BOSS",
+          shootTimer: 0
+        };
+      }
+    }
+
+    function launchStoryMode(idx) {
+      isStoryMode = true;
+      isBriefingOpen = true;
+      currentChapterIndex = idx;
+      chapterClearedTriggered = false;
+      chapterFailedTriggered = false;
+
+      const startScreen = document.getElementById("startScreen");
+      if (startScreen) startScreen.classList.add("hidden");
+
+      const ch = STORY_CHAPTERS[idx];
+      showBriefing(ch, false, () => {
+        isStoryMode = true;
+        if (typeof startGame === "function") startGame();
+        setupChapterMechanics(ch);
+        hudBadge.classList.remove("hidden");
+      });
+    }
+
+    document.addEventListener("click", (e) => {
+      const clickedStartBtn = e.target && e.target.closest("#startScreen button");
+      if (clickedStartBtn && clickedStartBtn.id !== "openStoryModeBtn" && !isBriefingOpen) {
+        isStoryMode = false;
+        hazards = [];
+        storyBoss = null;
+        storyBossBullets = [];
+        hudBadge.classList.add("hidden");
+      }
+    }, true);
+
+    // 3. 獨立戰役特效與機制主迴圈（渲染隕石、太陽風、專屬Boss、雷射網）
+    let tickCount = 0;
+    function updateAndRenderStoryEffects() {
+      fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+
+      if (!isStoryMode || isBriefingOpen || typeof state === "undefined" || state !== "PLAYING") {
+        requestAnimationFrame(updateAndRenderStoryEffects);
+        return;
+      }
+
+      tickCount++;
+      const ch = STORY_CHAPTERS[currentChapterIndex];
+      const hasPlayer = (typeof player !== "undefined" && player && typeof player.x === "number");
+
+      // 【第一章機制：隕石暴雨】
+      if (ch.modeType === "METEOR_STORM") {
+        if (tickCount % 45 === 0) {
+          hazards.push({
+            type: "METEOR",
+            x: Math.random() * (fxCanvas.width - 60) + 30,
+            y: -40,
+            vy: 4.5 + Math.random() * 2.5,
+            r: 22 + Math.random() * 14
+          });
+        }
+        for (let i = hazards.length - 1; i >= 0; i--) {
+          const m = hazards[i];
+          m.y += m.vy;
+          // 繪製帶火尾的赤紅隕石
+          fxCtx.save();
+          fxCtx.fillStyle = "rgba(255, 80, 40, 0.25)";
+          fxCtx.beginPath();
+          fxCtx.arc(m.x, m.y - 18, m.r * 0.85, 0, Math.PI * 2);
+          fxCtx.fill();
+
+          fxCtx.fillStyle = "#dc2626";
+          fxCtx.strokeStyle = "#fca5a5";
+          fxCtx.lineWidth = 2;
+          fxCtx.beginPath();
+          fxCtx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
+          fxCtx.fill();
+          fxCtx.stroke();
+          fxCtx.restore();
+
+          // 碰撞檢測
+          if (hasPlayer && Math.hypot(player.x - m.x, player.y - m.y) < m.r + 14) {
+            if (typeof player.hp === "number") player.hp -= 25;
+            hazards.splice(i, 1);
+            continue;
+          }
+          if (m.y > fxCanvas.height + 50) hazards.splice(i, 1);
+        }
+      }
+
+      // 【第二章機制：太陽風磁場＋火力支援】
+      if (ch.modeType === "SOLAR_WIND") {
+        const windDir = Math.sin(tickCount * 0.02) * 1.4;
+        if (hasPlayer) {
+          player.x = Math.max(20, Math.min(fxCanvas.width - 20, player.x + windDir));
+        }
+        // 繪製宇宙氣流線條
+        fxCtx.strokeStyle = "rgba(56, 189, 248, 0.18)";
+        fxCtx.lineWidth = 2;
+        for (let k = 0; k < 6; k++) {
+          const wy = ((tickCount * 4 + k * 140) % fxCanvas.height);
+          fxCtx.beginPath();
+          fxCtx.moveTo(0, wy);
+          fxCtx.lineTo(fxCanvas.width, wy + windDir * 35);
+          fxCtx.stroke();
+        }
+      }
+
+      // 【第四章機制：核心反應爐限時生存＋高能雷射掃射區】
+      if (ch.modeType === "SURVIVAL_60S") {
+        if (tickCount % 260 === 0) {
+          const laneW = Math.min(130, fxCanvas.width * 0.26);
+          hazards.push({
+            type: "LASER",
+            x: Math.random() * (fxCanvas.width - laneW),
+            w: laneW,
+            timer: 130 // 前 80 幀警告，後 50 幀發射雷射
+          });
+        }
+        for (let i = hazards.length - 1; i >= 0; i--) {
+          const lz = hazards[i];
+          lz.timer--;
+          if (lz.timer > 50) {
+            // 紅色閃爍預警區
+            fxCtx.fillStyle = (Math.floor(lz.timer / 8) % 2 === 0) ? "rgba(255, 0, 60, 0.18)" : "rgba(255, 0, 60, 0.06)";
+            fxCtx.fillRect(lz.x, 0, lz.w, fxCanvas.height);
+            fxCtx.strokeStyle = "#ff3b5c";
+            fxCtx.strokeRect(lz.x, 0, lz.w, fxCanvas.height);
+          } else if (lz.timer > 0) {
+            // 正式雷射光束
+            fxCtx.fillStyle = "rgba(255, 40, 90, 0.65)";
+            fxCtx.fillRect(lz.x, 0, lz.w, fxCanvas.height);
+            if (hasPlayer && player.x > lz.x && player.x < lz.x + lz.w && tickCount % 10 === 0) {
+              if (typeof player.hp === "number") player.hp -= 15;
+            }
+          } else {
+            hazards.splice(i, 1);
+          }
+        }
+      }
+
+      // 【第三章 & 終章機制：故事專屬巨型 BOSS 戰】
+      if (storyBoss && storyBoss.hp > 0) {
+        // Boss 移動
+        storyBoss.x += storyBoss.vx;
+        if (storyBoss.x < storyBoss.radius + 30 || storyBoss.x > fxCanvas.width - storyBoss.radius - 30) {
+          storyBoss.vx *= -1;
+        }
+
+        // Boss 發射專屬彈幕
+        storyBoss.shootTimer++;
+        const isEnraged = storyBoss.isFinal && (storyBoss.hp < storyBoss.maxHp * 0.5);
+        const interval = isEnraged ? 45 : 65;
+        if (storyBoss.shootTimer % interval === 0) {
+          const count = isEnraged ? 7 : 5;
+          for (let b = 0; b < count; b++) {
+            const angle = Math.PI * 0.25 + (Math.PI * 0.5) * (b / (count - 1));
+            storyBossBullets.push({
+              x: storyBoss.x,
+              y: storyBoss.y + storyBoss.radius * 0.6,
+              vx: Math.cos(angle) * 4.2,
+              vy: Math.sin(angle) * 4.2
+            });
+          }
+        }
+
+        // 偵測玩家子彈擊中故事 Boss（透過分數增加或子彈座標判定）
+        if (typeof bullets !== "undefined" && Array.isArray(bullets)) {
+          for (let bi = bullets.length - 1; bi >= 0; bi--) {
+            const bul = bullets[bi];
+            if (bul && typeof bul.x === "number" && Math.hypot(bul.x - storyBoss.x, bul.y - storyBoss.y) < storyBoss.radius) {
+              storyBoss.hp -= 18;
+              bullets.splice(bi, 1);
+            }
+          }
+        }
+        // 兼容保底：若遊戲子彈陣列名稱不同，每擊殺一隻小怪也會對 Boss 造成軌道砲支援傷害
+        if (typeof score === "number" && score > lastScore) {
+          storyBoss.hp -= 35;
+          lastScore = score;
+        }
+
+        // 繪製專屬 Boss 本體與頂部血條
+        fxCtx.save();
+        fxCtx.fillStyle = isEnraged ? "#be123c" : "#6d28d9";
+        fxCtx.strokeStyle = isEnraged ? "#fda4af" : "#c4b5fd";
+        fxCtx.lineWidth = 4;
+        fxCtx.beginPath();
+        fxCtx.arc(storyBoss.x, storyBoss.y, storyBoss.radius, 0, Math.PI * 2);
+        fxCtx.fill();
+        fxCtx.stroke();
+
+        // 核心眼睛
+        fxCtx.fillStyle = "#facc15";
+        fxCtx.beginPath();
+        fxCtx.arc(storyBoss.x, storyBoss.y, storyBoss.radius * 0.35, 0, Math.PI * 2);
+        fxCtx.fill();
+
+        // Boss 專屬血條
+        const barW = Math.min(340, fxCanvas.width * 0.75);
+        const barX = (fxCanvas.width - barW) / 2;
+        const hpRatio = Math.max(0, storyBoss.hp / storyBoss.maxHp);
+        fxCtx.fillStyle = "rgba(0,0,0,0.7)";
+        fxCtx.fillRect(barX, 46, barW, 14);
+        fxCtx.fillStyle = isEnraged ? "#ff2a5f" : "#a855f7";
+        fxCtx.fillRect(barX, 46, barW * hpRatio, 14);
+        fxCtx.strokeStyle = "#fff";
+        fxCtx.lineWidth = 1.5;
+        fxCtx.strokeRect(barX, 46, barW, 14);
+        fxCtx.fillStyle = "#fff";
+        fxCtx.font = "bold 12px sans-serif";
+        fxCtx.textAlign = "center";
+        fxCtx.fillText(`${storyBoss.name} (${Math.max(0, Math.ceil(storyBoss.hp))} / ${storyBoss.maxHp})`, fxCanvas.width / 2, 74);
+        fxCtx.restore();
+      }
+
+      // 更新並繪製 Boss 專屬彈幕
+      for (let i = storyBossBullets.length - 1; i >= 0; i--) {
+        const sb = storyBossBullets[i];
+        sb.x += sb.vx;
+        sb.y += sb.vy;
+        fxCtx.fillStyle = "#ff3b5c";
+        fxCtx.beginPath();
+        fxCtx.arc(sb.x, sb.y, 7, 0, Math.PI * 2);
+        fxCtx.fill();
+
+        if (hasPlayer && Math.hypot(player.x - sb.x, player.y - sb.y) < 16) {
+          if (typeof player.hp === "number") player.hp -= 15;
+          storyBossBullets.splice(i, 1);
+          continue;
+        }
+        if (sb.y > fxCanvas.height + 20 || sb.x < -20 || sb.x > fxCanvas.width + 20) {
+          storyBossBullets.splice(i, 1);
+        }
+      }
+
+      requestAnimationFrame(updateAndRenderStoryEffects);
+    }
+    requestAnimationFrame(updateAndRenderStoryEffects);
+
+    // 4. 章節勝負與任務進度檢查
+    setInterval(() => {
+      injectStoryButton();
+      if (!isStoryMode || isBriefingOpen || !storyFailModal.classList.contains("hidden")) return;
+      if (typeof state === "undefined") return;
+
+      const ch = STORY_CHAPTERS[currentChapterIndex];
+
+      // 玩家陣亡判定
+      const isPlayerDead = (state === "GAMEOVER") || (typeof player !== "undefined" && player && typeof player.hp === "number" && player.hp <= 0);
+      if (isPlayerDead && !chapterClearedTriggered && !chapterFailedTriggered) {
+        chapterFailedTriggered = true;
+        let failReason = `未達成目標：擊破 ${chapterKills} / ${ch.needKills || 0} 架`;
+        if (ch.modeType === "SURVIVAL_60S") {
+          const survived = Math.floor((Date.now() - chapterStartTime) / 1000);
+          failReason = `未撐過時間：堅持了 ${survived} / ${ch.surviveSeconds} 秒`;
+        } else if (storyBoss) {
+          failReason = `首領剩餘血量：${Math.max(0, Math.ceil(storyBoss.hp))} / ${storyBoss.maxHp}`;
+        }
+        showFailScreen(ch, failReason);
+        return;
+      }
+
+      if (state === "PLAYING" && storyOverlay.classList.contains("hidden")) {
+        if (typeof score === "number" && score > lastScore) {
+          chapterKills += 1;
+          lastScore = score;
+        }
+
+        let isCleared = false;
+        if (ch.modeType === "METEOR_STORM" || ch.modeType === "SOLAR_WIND") {
+          hudBadge.textContent = `${ch.title}｜擊破：${chapterKills} / ${ch.needKills}`;
+          if (chapterKills >= ch.needKills) isCleared = true;
+        } else if (ch.modeType === "SURVIVAL_60S") {
+          const elapsed = Math.floor((Date.now() - chapterStartTime) / 1000);
+          const left = Math.max(0, ch.surviveSeconds - elapsed);
+          hudBadge.textContent = `${ch.title}｜反應爐倒數：${left} 秒`;
+          if (left <= 0) isCleared = true;
+        } else if (ch.modeType === "STORY_BOSS_1" || ch.modeType === "FINAL_BOSS") {
+          hudBadge.textContent = `${ch.title}｜討伐專屬首領中`;
+          if (storyBoss && storyBoss.hp <= 0) isCleared = true;
+        }
+
+        if (isCleared && !chapterClearedTriggered) {
+          chapterClearedTriggered = true;
+          hazards = [];
+          storyBoss = null;
+          storyBossBullets = [];
+          saveUnlockedChapter(ch.id + 1);
+          if (typeof SoundEngine !== "undefined" && SoundEngine.playUpgrade) SoundEngine.playUpgrade();
+
+          const prevHp = (typeof player !== "undefined" && player) ? player.hp : null;
+          const guardTimer = setInterval(() => {
+            if (prevHp !== null && typeof player !== "undefined" && player) player.hp = prevHp;
+          }, 50);
+
+          showBriefing(ch, true, () => {
+            clearInterval(guardTimer);
+            if (currentChapterIndex + 1 < STORY_CHAPTERS.length) {
+              currentChapterIndex += 1;
+              chapterClearedTriggered = false;
+              setupChapterMechanics(STORY_CHAPTERS[currentChapterIndex]);
+            } else {
+              isStoryMode = false;
+              hudBadge.classList.add("hidden");
+              state = "START";
+              const startScreen = document.getElementById("startScreen");
+              if (startScreen) startScreen.classList.remove("hidden");
+            }
+          });
+        }
+      }
+    }, 200);
+
+    injectStoryButton();
   })();
 </script>
 </body>
