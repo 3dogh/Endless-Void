@@ -2104,6 +2104,49 @@
 
     injectStoryButton();
   })();
+</script><!-- === iPad 專屬流暢高幀率優化模組 (FPS Booster) === -->
+<script>
+  (function() {
+    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    if (!isTouch) return; // 僅針對 iPad / 平板優化，不影響電腦
+
+    // 1. 關閉 iPad Safari 最吃效能的 Canvas 陰影光暈 (shadowBlur)，幀率可大幅提升
+    const origGetContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function(type, attrs) {
+      const ctx = origGetContext.apply(this, arguments);
+      if (type === '2d' && ctx && !ctx.__fpsPatched) {
+        ctx.__fpsPatched = true;
+        try {
+          Object.defineProperty(ctx, 'shadowBlur', {
+            get: function() { return 0; },
+            set: function() {} // 忽略高耗能模糊計算
+          });
+        } catch (e) {}
+      }
+      return ctx;
+    };
+
+    // 2. 針對已經建立的畫布套用相同優化，並優化觸控渲染效能
+    document.querySelectorAll('canvas').forEach(function(cvs) {
+      const ctx = cvs.getContext('2d');
+      if (ctx && !ctx.__fpsPatched) {
+        ctx.__fpsPatched = true;
+        try {
+          Object.defineProperty(ctx, 'shadowBlur', {
+            get: function() { return 0; },
+            set: function() {}
+          });
+        } catch (e) {}
+      }
+    });
+
+    // 3. 限制同畫面粒子數量上限，防止大爆炸時掉幀
+    setInterval(function() {
+      if (typeof particles !== 'undefined' && Array.isArray(particles) && particles.length > 60) {
+        particles.splice(0, particles.length - 60);
+      }
+    }, 100);
+  })();
 </script>
 </body>
 </html>
