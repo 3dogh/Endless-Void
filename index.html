@@ -1695,10 +1695,9 @@
 
     setInterval(function() {
       if (typeof state !== 'undefined' && state === 'PLAYING' && typeof player !== 'undefined' && player) {
-</script><!-- === 星際遠征：故事模式外掛模組 v4（含專屬任務失敗畫面 + 防卡波數版） === -->
+</script><!-- === 星際遠征：故事模式外掛模組 v5（鎖定故事模式・防誤跳無盡模式） === -->
 <script>
   (function() {
-    // 1. 故事章節劇本設定
     const STORY_CHAPTERS = [
       {
         id: 1,
@@ -1752,8 +1751,9 @@
       }
     ];
 
-    const STORY_SAVE_KEY = "endless_void_story_progress_v4";
+    const STORY_SAVE_KEY = "endless_void_story_progress_v5";
     let isStoryMode = false;
+    let isBriefingOpen = false; // 標記正在看劇情簡報，防止狀態被誤重置
     let currentChapterIndex = 0;
     let chapterClearedTriggered = false;
     let chapterFailedTriggered = false;
@@ -1777,11 +1777,10 @@
       } catch (e) {}
     }
 
-    // 2. 樣式定義（包含劇情視窗 + 紅色警告風格的任務失敗畫面）
     const styleEl = document.createElement("style");
     styleEl.textContent = `
       #storyOverlay, #storyChapterModal, #storyFailModal {
-        position: fixed; inset: 0; background: rgba(4, 8, 20, 0.88);
+        position: fixed; inset: 0; background: rgba(4, 8, 20, 0.9);
         display: flex; align-items: center; justify-content: center;
         z-index: 9999; font-family: system-ui, -apple-system, sans-serif; color: #fff;
         backdrop-filter: blur(6px);
@@ -1802,9 +1801,7 @@
         font-size: 32px; background: rgba(0, 240, 255, 0.15); border: 1px solid #00f0ff;
         border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;
       }
-      .fail-theme .story-avatar {
-        background: rgba(255, 59, 92, 0.2); border-color: #ff3b5c;
-      }
+      .fail-theme .story-avatar { background: rgba(255, 59, 92, 0.2); border-color: #ff3b5c; }
       .story-title { font-size: 13px; color: #00f0ff; font-weight: bold; }
       .fail-theme .story-title { color: #ff6b81; }
       .story-speaker { font-size: 16px; font-weight: bold; color: #fff; margin-top: 2px; }
@@ -1812,23 +1809,14 @@
         font-size: 15px; line-height: 1.6; color: #dbeafe; background: rgba(0, 0, 0, 0.38);
         padding: 13px; border-radius: 8px; border-left: 3px solid #00f0ff; margin-bottom: 14px;
       }
-      .fail-theme .story-text {
-        color: #ffe4e6; border-left-color: #ff3b5c;
-      }
+      .fail-theme .story-text { color: #ffe4e6; border-left-color: #ff3b5c; }
       .story-btn {
         width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 16px;
         font-weight: bold; cursor: pointer; background: linear-gradient(90deg, #00c6ff, #0072ff);
         color: #fff; margin-top: 8px;
       }
-      .story-btn.retry-btn {
-        background: linear-gradient(90deg, #ff416c, #ff4b2b);
-        box-shadow: 0 4px 14px rgba(255, 65, 108, 0.45);
-      }
-      .story-btn.secondary-btn {
-        background: rgba(255, 255, 255, 0.12);
-        border: 1px solid rgba(255, 255, 255, 0.25);
-        font-size: 14px;
-      }
+      .story-btn.retry-btn { background: linear-gradient(90deg, #ff416c, #ff4b2b); }
+      .story-btn.secondary-btn { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.25); font-size: 14px; }
       .chapter-item {
         display: flex; justify-content: space-between; align-items: center;
         padding: 11px 14px; margin-bottom: 9px; border-radius: 8px;
@@ -1838,7 +1826,7 @@
       .chapter-item.locked { opacity: 0.45; cursor: not-allowed; border-color: #475569; }
       #storyHudBadge {
         position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
-        background: rgba(13, 23, 42, 0.9); border: 1px solid #00f0ff; color: #00f0ff;
+        background: rgba(13, 23, 42, 0.92); border: 1px solid #00f0ff; color: #00f0ff;
         padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: bold;
         z-index: 9000; pointer-events: none; white-space: nowrap;
       }
@@ -1850,7 +1838,6 @@
     hudBadge.className = "hidden";
     document.body.appendChild(hudBadge);
 
-    // 開場與過關通訊框
     const storyOverlay = document.createElement("div");
     storyOverlay.id = "storyOverlay";
     storyOverlay.className = "hidden";
@@ -1869,7 +1856,6 @@
     `;
     document.body.appendChild(storyOverlay);
 
-    // 任務失敗專屬畫面
     const storyFailModal = document.createElement("div");
     storyFailModal.id = "storyFailModal";
     storyFailModal.className = "hidden";
@@ -1890,7 +1876,6 @@
     `;
     document.body.appendChild(storyFailModal);
 
-    // 章節選擇視窗
     const chapterModal = document.createElement("div");
     chapterModal.id = "storyChapterModal";
     chapterModal.className = "hidden";
@@ -1920,7 +1905,10 @@
         border: 2px solid rgba(255,255,255,0.4); border-radius: 10px;
         box-shadow: 0 0 18px rgba(255, 0, 128, 0.45); letter-spacing: 1px;
       `;
-      btn.onclick = openChapterSelect;
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        openChapterSelect();
+      };
 
       const firstBtn = startScreen.querySelector("button");
       if (firstBtn && firstBtn.parentNode) {
@@ -1949,7 +1937,8 @@
           </div>
         `;
         if (!isLocked) {
-          item.onclick = () => {
+          item.onclick = (e) => {
+            e.stopPropagation();
             chapterModal.classList.add("hidden");
             launchStoryMode(idx);
           };
@@ -1960,11 +1949,13 @@
       chapterModal.classList.remove("hidden");
     }
 
-    document.getElementById("closeStoryModalBtn").onclick = () => {
+    document.getElementById("closeStoryModalBtn").onclick = (e) => {
+      e.stopPropagation();
       chapterModal.classList.add("hidden");
     };
 
     function showBriefing(ch, isOutro, onConfirm) {
+      isBriefingOpen = true;
       document.getElementById("storyAvatar").textContent = ch.avatar;
       document.getElementById("storyChapterTitle").textContent = ch.title;
       document.getElementById("storySpeaker").textContent = ch.speaker;
@@ -1976,15 +1967,16 @@
         : "開始出擊 🚀";
 
       storyOverlay.classList.remove("hidden");
-      actionBtn.onclick = () => {
+      actionBtn.onclick = (e) => {
+        e.stopPropagation();
         storyOverlay.classList.add("hidden");
+        isBriefingOpen = false;
         onConfirm();
       };
     }
 
     function showFailScreen(ch) {
       hudBadge.classList.add("hidden");
-      // 隱藏遊戲原本的 Game Over 視窗，改用專屬故事失敗畫面
       const gameOverScreen = document.getElementById("gameOverScreen");
       if (gameOverScreen) gameOverScreen.classList.add("hidden");
 
@@ -1995,14 +1987,17 @@
 
       storyFailModal.classList.remove("hidden");
 
-      document.getElementById("storyRetryBtn").onclick = () => {
+      document.getElementById("storyRetryBtn").onclick = (e) => {
+        e.stopPropagation();
         storyFailModal.classList.add("hidden");
         launchStoryMode(currentChapterIndex);
       };
 
-      document.getElementById("storyBackMenuBtn").onclick = () => {
+      document.getElementById("storyBackMenuBtn").onclick = (e) => {
+        e.stopPropagation();
         storyFailModal.classList.add("hidden");
         isStoryMode = false;
+        isBriefingOpen = false;
         if (typeof state !== "undefined") state = "START";
         const startScreen = document.getElementById("startScreen");
         if (startScreen) startScreen.classList.remove("hidden");
@@ -2011,14 +2006,20 @@
 
     function launchStoryMode(idx) {
       isStoryMode = true;
+      isBriefingOpen = true;
       currentChapterIndex = idx;
       chapterClearedTriggered = false;
       chapterFailedTriggered = false;
       totalStoryKills = idx === 0 ? 0 : STORY_CHAPTERS[idx - 1].needKills;
       lastScore = 0;
 
+      // 立刻隱藏主選單，防止狀態被重置
+      const startScreen = document.getElementById("startScreen");
+      if (startScreen) startScreen.classList.add("hidden");
+
       const ch = STORY_CHAPTERS[idx];
       showBriefing(ch, false, () => {
+        isStoryMode = true; // 再次確保為故事模式
         if (typeof startGame === "function") {
           startGame();
         }
@@ -2027,7 +2028,15 @@
       });
     }
 
-    // 3. 即時監聽：達標過關 OR 未達標陣亡失敗
+    // 只有當玩家真正點擊原本的「開始遊戲 / 難度」按鈕時，才切換為無盡模式
+    document.addEventListener("click", (e) => {
+      const clickedStartBtn = e.target && e.target.closest("#startScreen button");
+      if (clickedStartBtn && clickedStartBtn.id !== "openStoryModeBtn" && !isBriefingOpen) {
+        isStoryMode = false;
+        hudBadge.classList.add("hidden");
+      }
+    }, true);
+
     setInterval(() => {
       injectStoryButton();
 
@@ -2036,16 +2045,14 @@
         return;
       }
 
-      if (typeof state !== "undefined") {
-        if (state === "START" || state === "MENU") {
-          isStoryMode = false;
-          hudBadge.classList.add("hidden");
-          return;
-        }
+      // 正在看簡報或失敗畫面時，不執行退回主選單檢查
+      if (isBriefingOpen || !storyFailModal.classList.contains("hidden")) {
+        return;
+      }
 
+      if (typeof state !== "undefined") {
         const ch = STORY_CHAPTERS[currentChapterIndex];
 
-        // 偵測玩家在未完成擊殺目標前陣亡（GAMEOVER 或血量 <= 0）
         const isPlayerDead = (state === "GAMEOVER") || (typeof player !== "undefined" && player && typeof player.hp === "number" && player.hp <= 0);
         if (isPlayerDead && !chapterClearedTriggered && !chapterFailedTriggered) {
           chapterFailedTriggered = true;
@@ -2053,7 +2060,7 @@
           return;
         }
 
-        if (state === "PLAYING" && storyOverlay.classList.contains("hidden") && storyFailModal.classList.contains("hidden")) {
+        if (state === "PLAYING" && storyOverlay.classList.contains("hidden")) {
           if (typeof score === "number" && score > lastScore) {
             totalStoryKills += 1;
             lastScore = score;
@@ -2061,7 +2068,6 @@
 
           hudBadge.textContent = `${ch.title}｜擊破進度：${totalStoryKills} / ${ch.needKills}`;
 
-          // 達到目標擊殺數 -> 過關
           if (totalStoryKills >= ch.needKills && !chapterClearedTriggered) {
             chapterClearedTriggered = true;
             saveUnlockedChapter(ch.id + 1);
@@ -2095,13 +2101,6 @@
         }
       }
     }, 200);
-
-    document.addEventListener("click", (e) => {
-      if (e.target && e.target.id !== "openStoryModeBtn" && e.target.closest("#startScreen button")) {
-        isStoryMode = false;
-        hudBadge.classList.add("hidden");
-      }
-    }, true);
 
     injectStoryButton();
   })();
