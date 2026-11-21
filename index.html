@@ -1885,7 +1885,19 @@
 
       if (isStoryActive && !isModalOpen && !isGamePaused) {
         frame++;
-        const ch = STORY_CHAPTERS[chIdx];
+          // 在非 Boss 故事章節中，自動清除無盡模式的原生 Boss
+        if (ch.mode !== "BOSS") {
+          if (typeof boss !== "undefined" && boss) {
+            boss = null;
+          }
+          if (typeof enemies !== "undefined" && Array.isArray(enemies)) {
+            for (let ei = enemies.length - 1; ei >= 0; ei--) {
+              if (enemies[ei] && (enemies[ei].isBoss || enemies[ei].type === "boss" || enemies[ei].maxHp > 200)) {
+                enemies.splice(ei, 1);
+              }
+            }
+          }
+        }
         const px = (typeof player !== 'undefined' && player && typeof player.x === 'number') ? player.x : pointerX;
         const py = (typeof player !== 'undefined' && player && typeof player.y === 'number') ? player.y : pointerY;
 
