@@ -1569,65 +1569,84 @@
         renderLeaderboard();
       }
     }
+// 強制無條件接管全球排行榜（解決局部作用域偵測不到的問題）
+    window.getLeaderboard = () => globalLeaderboardCache;
 
-    if (typeof getLeaderboard !== 'undefined') getLeaderboard = () => globalLeaderboardCache;
-    if (typeof openLeaderboard !== 'undefined') {
-      openLeaderboard = () => {
+    window.openLeaderboard = () => {
+      const lb = document.getElementById('leaderboardScreen');
+      if (lb) {
+        if (typeof renderLeaderboard === 'function') renderLeaderboard();
+        lb.classList.remove('hidden');
+      }
+      syncGlobalLeaderboard();
+    };
+
+    window.submitHighScore = async function() {
+      if ((typeof scoreSubmittedThisRun !== 'undefined' && scoreSubmittedThisRun) || isUploadingScore || typeof score === 'undefined' || score <= 0) return;
+      const input = document.getElementById('playerNameInput');
+      let playerName = (input && input.value || '').trim() || 'COMMANDER';
+      const runSignature = `${score}_${typeof wave !== 'undefined' ? wave : 1}_${typeof difficulty !== 'undefined' ? difficulty : 'NORMAL'}`;
+      if (uploadedRunSignatures.has(runSignature)) {
+        alert("本局戰績已經登錄過囉！");
+        return;
+      }
+      isUploadingScore = true;
+      if (typeof scoreSubmittedThisRun !== 'undefined') scoreSubmittedThisRun = true;
+      uploadedRunSignatures.add(runSignature);
+
+      const submitBtn = document.querySelector('#newRecordBox button');
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '上傳中...'; }
+
+      const newEntry = {
+        name: playerName,
+        score: score,
+        wave: typeof wave !== 'undefined' ? wave : 1,
+        diff: typeof difficulty !== 'undefined' ? difficulty : 'NORMAL',
+        time: Date.now()
+      };
+
+      try {
+        const res = await fetch(FIREBASE_LEADERBOARD_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newEntry)
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        score = 0;
+        const box = document.getElementById('newRecordBox');
+        if (box) box.classList.add('hidden');
+        await syncGlobalLeaderboard();
         if (typeof renderLeaderboard === 'function') renderLeaderboard();
         const lb = document.getElementById('leaderboardScreen');
         if (lb) lb.classList.remove('hidden');
-        syncGlobalLeaderboard();
-      };
-    }
-    if (typeof submitHighScore !== 'undefined') {
-      submitHighScore = async function() {
-        if ((typeof scoreSubmittedThisRun !== 'undefined' && scoreSubmittedThisRun) || isUploadingScore || typeof score === 'undefined' || score <= 0) return;
-        const input = document.getElementById('playerNameInput');
-        let playerName = (input && input.value || '').trim() || 'COMMANDER';
-        const runSignature = `${score}_${typeof wave !== 'undefined' ? wave : 1}_${typeof difficulty !== 'undefined' ? difficulty : 'NORMAL'}`;
-        if (uploadedRunSignatures.has(runSignature)) {
-          alert("本局戰績已經登錄過囉！");
-          return;
+      } catch (e) {
+        if (typeof scoreSubmittedThisRun !== 'undefined') scoreSubmittedThisRun = false;
+        uploadedRunSignatures.delete(runSignature);
+        alert("上傳失敗：" + e.message);
+      } finally {
+        isUploadingScore = false;
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '登錄'; }
+      }
+    };
+
+    // 若主選單的排行榜按鈕被隱藏或誤刪，自動補回並綁定全球同步
+    setTimeout(() => {
+      const ss = document.getElementById('startScreen');
+      if (ss && !document.getElementById('forceGlobalLbBtn')) {
+        const existingLbBtn = Array.from(ss.querySelectorAll('button')).find(b => b.textContent.includes('排行') || b.textContent.includes('LEADERBOARD'));
+        if (existingLbBtn) {
+          existingLbBtn.onclick = (e) => { e.stopPropagation(); window.openLeaderboard(); };
+        } else {
+          const lbBtn = document.createElement('button');
+          lbBtn.id = 'forceGlobalLbBtn';
+          lbBtn.textContent = '🏆 全球排行榜 / LEADERBOARD';
+          lbBtn.style.cssText = 'display:block;width:260px;margin:10px auto;padding:11px;font-size:15px;font-weight:bold;color:#fff;background:linear-gradient(90deg,#f59e0b,#d97706);border:2px solid rgba(255,255,255,0.4);border-radius:10px;cursor:pointer;';
+          lbBtn.onclick = (e) => { e.stopPropagation(); window.openLeaderboard(); };
+          ss.appendChild(lbBtn);
         }
-        isUploadingScore = true;
-        if (typeof scoreSubmittedThisRun !== 'undefined') scoreSubmittedThisRun = true;
-        uploadedRunSignatures.add(runSignature);
+      }
+    }, 500);
 
-        const submitBtn = document.querySelector('#newRecordBox button');
-        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '上傳中...'; }
-
-        const newEntry = {
-          name: playerName,
-          score: score,
-          wave: typeof wave !== 'undefined' ? wave : 1,
-          diff: typeof difficulty !== 'undefined' ? difficulty : 'NORMAL',
-          time: Date.now()
-        };
-
-        try {
-          const res = await fetch(FIREBASE_LEADERBOARD_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newEntry)
-          });
-          if (!res.ok) throw new Error("HTTP " + res.status);
-          score = 0;
-          const box = document.getElementById('newRecordBox');
-          if (box) box.classList.add('hidden');
-          await syncGlobalLeaderboard();
-          if (typeof renderLeaderboard === 'function') renderLeaderboard();
-          const lb = document.getElementById('leaderboardScreen');
-          if (lb) lb.classList.remove('hidden');
-        } catch (e) {
-          if (typeof scoreSubmittedThisRun !== 'undefined') scoreSubmittedThisRun = false;
-          uploadedRunSignatures.delete(runSignature);
-          alert("上傳失敗：" + e.message);
-        } finally {
-          isUploadingScore = false;
-          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '登錄'; }
-        }
-      };
-    }
     syncGlobalLeaderboard();
 
     // ==========================================
