@@ -1836,8 +1836,12 @@
       if (isTouch && typeof player !== 'undefined' && player && typeof player.speed === 'number' && player.speed < 9) {
         player.speed = 9;
       }
+        // 偵測遊戲原本的升級選單或暫停畫面是否正在顯示
+      const upgScreen = document.getElementById('upgradeScreen');
+      const isUpgrading = (upgScreen && !upgScreen.classList.contains('hidden')) ||
+                          (typeof state !== 'undefined' && state !== 'PLAYING');
 
-      if (isStoryActive && !isModalOpen) {
+      if (isStoryActive && !isModalOpen && !isUpgrading) {
         frame++;
         const ch = STORY_CHAPTERS[chIdx];
         const px = (typeof player !== 'undefined' && player && typeof player.x === 'number') ? player.x : pointerX;
