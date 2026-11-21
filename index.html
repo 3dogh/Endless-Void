@@ -1502,911 +1502,456 @@
         }
 
         loop();
-    </script>
-    <!-- === Firebase 全球雲端排行榜外掛模組 === -->
-<style>
-  #fb-rank-btn {
-    position: fixed;
-    top: 15px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 60;
-    background: linear-gradient(45deg, #f59e0b, #ec4899);
-    color: #fff;
-    font-family: 'Audiowide', 'Chakra Petch', sans-serif;
-    font-size: 0.9rem;
-    font-weight: bold;
-    padding: 8px 18px;
-    border: 2px solid rgba(255, 255, 255, 0.6);
-    border-radius: 999px;
-    box-shadow: 0 0 15px rgba(245, 158, 11, 0.6);
-    cursor: pointer;
-    pointer-events: auto;
-  }
-  #fb-rank-btn:active { transform: translateX(-50%) scale(0.95); }
-  #fb-rank-modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(5, 5, 16, 0.92);
-    backdrop-filter: blur(8px);
-    z-index: 100;
-    display: none;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: 20px;
-  }
-  #fb-rank-modal.open { display: flex; }
-</style>
-
-<button id="fb-rank-btn" onclick="openGlobalRank()">🏆 全球排行榜</button>
-
-<div id="fb-rank-modal">
-  <div class="w-full max-w-md bg-gray-900/95 border-2 border-cyan-400/60 rounded-2xl p-5 shadow-[0_0_25px_rgba(34,211,238,0.4)] text-white">
-    <div class="flex justify-between items-center mb-3 border-b border-gray-700 pb-2">
-      <h3 class="font-en text-xl text-cyan-300 tracking-wider">🏆 GLOBAL TOP 10</h3>
-      <button onclick="closeGlobalRank()" class="text-gray-400 hover:text-white text-2xl font-bold px-2">✕</button>
-    </div>
-
-    <div id="fb-rank-list" class="space-y-2 max-h-60 overflow-y-auto mb-4 text-sm">
-      <div class="text-center text-gray-400 py-6">正在連線至 Firebase 雲端資料庫...</div>
-    </div>
-
-    <div class="border-t border-gray-700 pt-3">
-      <div class="text-xs text-cyan-300 mb-2">當前偵測分數：<span id="fb-detected-score" class="font-en text-yellow-400 text-base font-bold">0</span> 分</div>
-      <div class="flex gap-2">
-        <input id="fb-player-name" type="text" maxlength="12" placeholder="輸入戰士代號..." class="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-400" />
-        <button id="fb-submit-btn" onclick="submitGlobalScore()" class="bg-gradient-to-r from-pink-500 to-purple-600 px-4 py-2 rounded-lg font-bold text-sm shadow-lg active:scale-95">上傳戰績</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script>
-  const FB_DB_URL = "https://endless-void-cabbc-default-rtdb.firebaseio.com/leaderboard.json";
-
-  function getCurrentGameScore() {
-    const el = document.getElementById("scoreDisplay");
-    if (!el) return 0;
-    const val = parseInt(el.textContent.replace(/[^0-9]/g, ""), 10);
-    return isNaN(val) ? 0 : val;
-  }
-
-  function openGlobalRank() {
-    document.getElementById("fb-rank-modal").classList.add("open");
-    document.getElementById("fb-detected-score").textContent = getCurrentGameScore();
-    const savedName = localStorage.getItem("ev_player_name");
-    if (savedName) document.getElementById("fb-player-name").value = savedName;
-    loadGlobalRanks();
-  }
-
-  function closeGlobalRank() {
-    document.getElementById("fb-rank-modal").classList.remove("open");
-  }
-
-  async function loadGlobalRanks() {
-    const listEl = document.getElementById("fb-rank-list");
-    listEl.innerHTML = '<div class="text-center text-gray-400 py-6">讀取中...</div>';
-    try {
-      const res = await fetch(FB_DB_URL);
-      const data = await res.json();
-      if (!data) {
-        listEl.innerHTML = '<div class="text-center text-gray-400 py-6">目前還沒有紀錄，快搶下全球第一名！</div>';
-        return;
-      }
-      const records = Object.values(data)
-        .filter(item => item && typeof item.score === "number")
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 10);
-
-      listEl.innerHTML = records.map((r, i) => {
-        const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`;
-        const safeName = String(r.name || "無名戰士").replace(/[<>&"']/g, "");
-        return `
-          <div class="flex justify-between items-center bg-gray-800/80 px-3 py-2 rounded-lg border border-gray-700/60">
-            <div class="flex items-center gap-2">
-              <span class="font-en text-yellow-400 w-7">${medal}</span>
-              <span class="font-bold text-white">${safeName}</span>
-            </div>
-            <span class="font-en text-pink-400 font-bold">${r.score.toLocaleString()}</span>
-          </div>
-        `;
-      }).join("");
-    } catch (e) {
-      listEl.innerHTML = '<div class="text-center text-red-400 py-6">連線失敗，請檢查網路或 Firebase 權限規則。</div>';
-    }
-  }
-
-  async function submitGlobalScore() {
-    const nameInput = document.getElementById("fb-player-name");
-    const btn = document.getElementById("fb-submit-btn");
-    const name = nameInput.value.trim() || "無名戰士";
-    const score = getCurrentGameScore();
-
-    if (score <= 0) {
-      alert("目前分數為 0，請先遊玩獲得分數後再上傳！");
-      return;
-    }
-
-    localStorage.setItem("ev_player_name", name);
-    btn.disabled = true;
-    btn.textContent = "上傳中...";
-
-    try {
-      await fetch(FB_DB_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, score, time: Date.now() })
-      });
-      await loadGlobalRanks();
-    } catch (e) {
-      alert("上傳失敗，請稍後再試！");
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "上傳戰績";
-    }
-  }
-</script><!-- === 極簡零卡頓 60FPS + Boss 限速模組 === -->
+    </script><!-- === Endless Void 終極整合外掛（極致流暢 + 防刷榜排行榜 + 獨立故事戰役） === -->
 <script>
   (function() {
-    // 1. 取得最原始的瀏覽器原生 requestAnimationFrame（透過空白 iframe 隔離，徹底繞過任何舊覆寫）
-    const cleanFrame = document.createElement('iframe');
-    cleanFrame.style.display = 'none';
-    document.body.appendChild(cleanFrame);
-    const nativeRAF = cleanFrame.contentWindow.requestAnimationFrame.bind(window);
-    document.body.removeChild(cleanFrame);
-
-    let lastTick = 0;
-    const minInterval = 1000 / 62; // 鎖定在約 60 FPS
-
-    // 2. 用原生 RAF 進行純時間戳記過濾（零遞迴、零 setTimeout 堆積，絕不卡死）
-    window.requestAnimationFrame = function(callback) {
-      return nativeRAF(function loop(now) {
-        if (now - lastTick >= minInterval) {
-          lastTick = now;
-          callback(now);
-        } else {
-          nativeRAF(loop);
-        }
-      });
-    };
-
-    // 3. Boss 速度上限鎖（防止殘血狂暴或後期過快）
-    const MAX_BOSS_SPEED = 4.2;
-    setInterval(function() {
-      if (typeof state !== 'undefined' && state === 'PLAYING' && typeof boss !== 'undefined' && boss) {
-        if (typeof boss.speed === 'number' && boss.speed > MAX_BOSS_SPEED) boss.speed = MAX_BOSS_SPEED;
-        if (typeof boss.vx === 'number') boss.vx = Math.max(-MAX_BOSS_SPEED, Math.min(MAX_BOSS_SPEED, boss.vx));
-        if (typeof boss.vy === 'number') boss.vy = Math.max(-MAX_BOSS_SPEED * 0.7, Math.min(MAX_BOSS_SPEED * 0.7, boss.vy));
-        if (typeof boss.fireRate === 'number' && boss.fireRate < 35) boss.fireRate = 35;
-        if (typeof boss.attackCooldown === 'number' && boss.attackCooldown < 35) boss.attackCooldown = 35;
-      }
-    }, 100);
-  })();
-</script><!-- === 玩家戰機操控靈敏度與 iPad 移動加速模組 === -->
-<script>
-  (function() {
-    // 偵測是否為 iPad / 平板 / 觸控裝置（iPadOS Safari 預設會偽裝成 MacIntel，需搭配 maxTouchPoints 判斷）
-    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-    
-    // 設定戰機移動速度加成倍率（1.5 = 加快 50%，覺得還不夠快可改成 1.8 或 2.0）
-    const SPEED_MULTIPLIER = isTouchDevice ? 1.65 : 1.25;
-    let basePlayerSpeed = null;
-
-    setInterval(function() {
-      if (typeof state !== 'undefined' && state === 'PLAYING' && typeof player !== 'undefined' && player) {
-</script><!-- === iPad 專屬流暢高幀率優化模組 (FPS Booster) === -->
-<script>
-  (function() {
+    // ==========================================
+    // 一、極致流暢優化（關閉吃效能的陰影模糊 + 釋放原生高幀率）
+    // ==========================================
     const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-    if (!isTouch) return; // 僅針對 iPad / 平板優化，不影響電腦
-
-    // 1. 關閉 iPad Safari 最吃效能的 Canvas 陰影光暈 (shadowBlur)，幀率可大幅提升
-    const origGetContext = HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.getContext = function(type, attrs) {
-      const ctx = origGetContext.apply(this, arguments);
-      if (type === '2d' && ctx && !ctx.__fpsPatched) {
-        ctx.__fpsPatched = true;
+    const mainCanvas = document.querySelector('canvas');
+    if (mainCanvas) {
+      const ctx = mainCanvas.getContext('2d');
+      if (ctx && isTouch) {
         try {
-          Object.defineProperty(ctx, 'shadowBlur', {
-            get: function() { return 0; },
-            set: function() {} // 忽略高耗能模糊計算
-          });
+          Object.defineProperty(ctx, 'shadowBlur', { get: () => 0, set: () => {} });
         } catch (e) {}
       }
-      return ctx;
-    };
+    }
 
-    // 2. 針對已經建立的畫布套用相同優化，並優化觸控渲染效能
-    document.querySelectorAll('canvas').forEach(function(cvs) {
-      const ctx = cvs.getContext('2d');
-      if (ctx && !ctx.__fpsPatched) {
-        ctx.__fpsPatched = true;
+    // 追蹤玩家即時螢幕座標（相容所有寫法，確保隕石/雷射碰撞 100% 準確）
+    let pointerX = window.innerWidth / 2;
+    let pointerY = window.innerHeight * 0.8;
+    window.addEventListener('touchmove', (e) => {
+      if (e.touches && e.touches[0]) {
+        pointerX = e.touches[0].clientX;
+        pointerY = e.touches[0].clientY;
+      }
+    }, { passive: true });
+    window.addEventListener('mousemove', (e) => {
+      pointerX = e.clientX;
+      pointerY = e.clientY;
+    }, { passive: true });
+
+    // ==========================================
+    // 二、防刷榜 Firebase 全球排行榜
+    // ==========================================
+    const FIREBASE_LEADERBOARD_URL = "https://endless-void-cabbc-default-rtdb.firebaseio.com/leaderboard.json";
+    let globalLeaderboardCache = [
+      { name: 'NOVA-01', score: 1200, wave: 6, diff: 'HARD' },
+      { name: 'STARLORD', score: 850, wave: 5, diff: 'EASY' },
+      { name: 'VIPER-X', score: 500, wave: 3, diff: 'HARD' },
+      { name: 'ACE-PILOT', score: 300, wave: 2, diff: 'EASY' },
+      { name: 'ROOKIE', score: 150, wave: 1, diff: 'EASY' }
+    ];
+    let isUploadingScore = false;
+    let uploadedRunSignatures = new Set();
+
+    async function syncGlobalLeaderboard() {
+      try {
+        const res = await fetch(FIREBASE_LEADERBOARD_URL + "?t=" + Date.now());
+        const data = await res.json();
+        if (data && typeof data === 'object') {
+          const rawList = Object.values(data).filter(item => item && typeof item.score === 'number' && item.score > 0);
+          if (rawList.length > 0) {
+            rawList.sort((a, b) => b.score - a.score);
+            const bestByPlayer = new Map();
+            for (const entry of rawList) {
+              const cleanName = String(entry.name || 'COMMANDER').trim().toUpperCase();
+              if (!bestByPlayer.has(cleanName)) bestByPlayer.set(cleanName, entry);
+            }
+            globalLeaderboardCache = Array.from(bestByPlayer.values()).slice(0, 5);
+          }
+        }
+      } catch (e) {}
+      const screen = document.getElementById('leaderboardScreen');
+      if (screen && !screen.classList.contains('hidden') && typeof renderLeaderboard === 'function') {
+        renderLeaderboard();
+      }
+    }
+
+    if (typeof getLeaderboard !== 'undefined') getLeaderboard = () => globalLeaderboardCache;
+    if (typeof openLeaderboard !== 'undefined') {
+      openLeaderboard = () => {
+        if (typeof renderLeaderboard === 'function') renderLeaderboard();
+        const lb = document.getElementById('leaderboardScreen');
+        if (lb) lb.classList.remove('hidden');
+        syncGlobalLeaderboard();
+      };
+    }
+    if (typeof submitHighScore !== 'undefined') {
+      submitHighScore = async function() {
+        if ((typeof scoreSubmittedThisRun !== 'undefined' && scoreSubmittedThisRun) || isUploadingScore || typeof score === 'undefined' || score <= 0) return;
+        const input = document.getElementById('playerNameInput');
+        let playerName = (input && input.value || '').trim() || 'COMMANDER';
+        const runSignature = `${score}_${typeof wave !== 'undefined' ? wave : 1}_${typeof difficulty !== 'undefined' ? difficulty : 'NORMAL'}`;
+        if (uploadedRunSignatures.has(runSignature)) {
+          alert("本局戰績已經登錄過囉！");
+          return;
+        }
+        isUploadingScore = true;
+        if (typeof scoreSubmittedThisRun !== 'undefined') scoreSubmittedThisRun = true;
+        uploadedRunSignatures.add(runSignature);
+
+        const submitBtn = document.querySelector('#newRecordBox button');
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '上傳中...'; }
+
+        const newEntry = {
+          name: playerName,
+          score: score,
+          wave: typeof wave !== 'undefined' ? wave : 1,
+          diff: typeof difficulty !== 'undefined' ? difficulty : 'NORMAL',
+          time: Date.now()
+        };
+
         try {
-          Object.defineProperty(ctx, 'shadowBlur', {
-            get: function() { return 0; },
-            set: function() {}
+          const res = await fetch(FIREBASE_LEADERBOARD_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newEntry)
           });
-        } catch (e) {}
-      }
-    });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          score = 0;
+          const box = document.getElementById('newRecordBox');
+          if (box) box.classList.add('hidden');
+          await syncGlobalLeaderboard();
+          if (typeof renderLeaderboard === 'function') renderLeaderboard();
+          const lb = document.getElementById('leaderboardScreen');
+          if (lb) lb.classList.remove('hidden');
+        } catch (e) {
+          if (typeof scoreSubmittedThisRun !== 'undefined') scoreSubmittedThisRun = false;
+          uploadedRunSignatures.delete(runSignature);
+          alert("上傳失敗：" + e.message);
+        } finally {
+          isUploadingScore = false;
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '登錄'; }
+        }
+      };
+    }
+    syncGlobalLeaderboard();
 
-    // 3. 限制同畫面粒子數量上限，防止大爆炸時掉幀
-    setInterval(function() {
-      if (typeof particles !== 'undefined' && Array.isArray(particles) && particles.length > 60) {
-        particles.splice(0, particles.length - 60);
-      }
-    }, 100);
-  })();
-</script><!-- === 星際遠征：故事模式外掛模組 v6（獨立關卡機制・專屬Boss・限時生存版） === -->
-<script>
-  (function() {
+    // ==========================================
+    // 三、獨立故事戰役系統（高層級強制渲染隕石 & 專屬 Boss）
+    // ==========================================
     const STORY_CHAPTERS = [
       {
-        id: 1,
-        title: "第一章：邊境警戒線",
-        modeType: "METEOR_STORM", // 專屬機制：隕石暴雨 + 擊殺目標
-        needKills: 25,
-        speaker: "艦隊總部・艾琳娜指揮官",
-        avatar: "👩‍🚀",
-        intro: "「指揮官，第 7 星區正遭遇【隕石暴雨】與虛空先遣隊雙重夾擊！小心閃避赤紅隕石，並擊破 25 架敵機！」",
-        outro: "「漂亮的閃避！隕石帶與先遣隊已全數清除，但前方小行星區偵測到異常重力場……」",
-        fail: "「戰機在隕石雨中受損過重！注意觀察紅色預警軌跡，再試一次！」"
+        id: 1, title: "第一章：邊境警戒線", mode: "METEOR", target: 25,
+        speaker: "艦隊總部・艾琳娜指揮官", avatar: "👩‍🚀",
+        intro: "「指揮官，第 7 星區正遭遇【赤紅隕石暴雨】！閃避落下的巨型隕石，並擊破 25 架敵機！」",
+        outro: "「漂亮的閃避！隕石帶與先遣隊已全數清除，準備進入下一星區！」",
+        fail: "「戰機被隕石擊中墜毀！注意閃避高溫赤紅隕石，再試一次！」"
       },
       {
-        id: 2,
-        title: "第二章：小行星伏擊戰",
-        modeType: "SOLAR_WIND", // 專屬機制：太陽風氣流牽引 + 火力過載支援
-        needKills: 45,
-        speaker: "情報官・凱爾",
-        avatar: "📡",
-        intro: "「本星區存在強烈【太陽風氣流】會推動機身！總部已為你開啟武器超載支援，請在氣流中擊破 45 架敵機！」",
-        outro: "「成功突破引力漩渦！警告——前方雷達出現超巨型戰艦熱源！」",
-        fail: "「太陽風干擾了飛行姿態……順著氣流微調方向，再次突圍吧！」"
+        id: 2, title: "第二章：深空巨獸", mode: "BOSS", bossHp: 900,
+        speaker: "虛空先鋒・薩羅斯", avatar: "👾",
+        intro: "「見識一下【薩羅斯巨型母艦】的毀滅彈幕吧！（目標：摧毀母艦 BOSS）」",
+        outro: "「不可能……核心裝甲竟然被擊穿了！但真正的主宰正在核心深處等著你……」",
+        fail: "「在薩羅斯母艦的砲火面前，人類戰機根本不堪一擊！」"
       },
       {
-        id: 3,
-        title: "第三章：深空巨獸",
-        modeType: "STORY_BOSS_1", // 專屬機制：故事專屬巨型母艦 BOSS 戰
-        bossName: "虛空巨獸・薩羅斯母艦",
-        bossMaxHp: 1200,
-        speaker: "虛空先鋒・薩羅斯",
-        avatar: "👾",
-        intro: "「渺小的人類戰機！見識一下【薩羅斯巨型母艦】的毀滅彈幕吧！（目標：摧毀專屬母艦 BOSS）」",
-        outro: "「不可能……核心裝甲竟然被擊穿了！但真正的主宰正在反應爐深處等著你……」",
-        fail: "「在薩羅斯母艦的扇形砲火面前，人類戰機根本不堪一擊！」"
-      },
-      {
-        id: 4,
-        title: "第四章：核心反應爐",
-        modeType: "SURVIVAL_60S", // 專屬機制：限時生存 60 秒 + 雷射掃射區
-        surviveSeconds: 60,
-        speaker: "艦隊總部・艾琳娜指揮官",
-        avatar: "👩‍🚀",
-        intro: "「我們已抵達敵軍能源中樞！反應爐每 10 秒會釋放【高能雷射網】，請躲開紅色警告區並撐過 60 秒！」",
-        outro: "「核心反應爐已過載引爆！通往最終王座的航道已經開啟！」",
-        fail: "「沒能撐過反應爐的高能脈衝……看準紅色警告區提前閃避！」"
-      },
-      {
-        id: 5,
-        title: "終章：無盡虛空之主",
-        modeType: "FINAL_BOSS", // 專屬機制：雙形態最終魔王決戰
-        bossName: "無盡虛空之主・歐米茄",
-        bossMaxHp: 2200,
-        speaker: "虛空主宰・歐米茄",
-        avatar: "👁️",
-        intro: "「一切終將歸於虛無。來吧，指揮官，見證【虛空之主】的最終形態！（最終決戰：擊敗歐米茄）」",
-        outro: "「虛空裂縫已經徹底閉合，銀河系恢復了和平！恭喜你完成《無盡虛空》全部故事戰役！」",
-        fail: "「在無盡虛空之主面前，一切抵抗都是徒勞……重整戰機再戰一次吧！」"
+        id: 3, title: "終章：核心生存戰", mode: "SURVIVE", target: 45,
+        speaker: "虛空主宰・歐米茄", avatar: "👁️",
+        intro: "「核心反應爐已進入過載倒數！在密集隕石雨中撐過 45 秒即可封印虛空裂縫！」",
+        outro: "「虛空裂縫已經徹底閉合，銀河系恢復了和平！恭喜通關全部故事戰役！」",
+        fail: "「沒能撐過反應爐過載倒數……看準空隙閃避，再戰一次！」"
       }
     ];
 
-    const STORY_SAVE_KEY = "endless_void_story_progress_v6";
-    let isStoryMode = false;
-    let isBriefingOpen = false;
-    let currentChapterIndex = 0;
-    let chapterClearedTriggered = false;
-    let chapterFailedTriggered = false;
+    const SAVE_KEY = "endless_void_story_v7";
+    let isStoryActive = false;
+    let isModalOpen = false;
+    let chIdx = 0;
+    let kills = 0;
+    let prevScore = 0;
+    let startTime = 0;
+    let meteors = [];
+    let bossObj = null;
 
-    // 專屬關卡狀態變數
-    let chapterKills = 0;
-    let lastScore = 0;
-    let chapterStartTime = 0;
-    let hazards = []; // 隕石、雷射區
-    let storyBoss = null; // 故事模式專屬 Boss
-    let storyBossBullets = [];
+    // 使用最高 z-index 畫布確保絕對不會被遊戲畫面蓋住
+    const overlayCanvas = document.createElement('canvas');
+    overlayCanvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:2147483640;';
+    document.body.appendChild(overlayCanvas);
+    const oCtx = overlayCanvas.getContext('2d');
+    function syncSize() {
+      overlayCanvas.width = window.innerWidth;
+      overlayCanvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', syncSize);
+    syncSize();
 
-    function getUnlockedChapter() {
-      try {
-        const saved = parseInt(localStorage.getItem(STORY_SAVE_KEY) || "1", 10);
-        return isNaN(saved) ? 1 : Math.min(STORY_CHAPTERS.length, Math.max(1, saved));
-      } catch (e) { return 1; }
+    // 建立 UI
+    const uiWrap = document.createElement('div');
+    uiWrap.innerHTML = `
+      <div id="stHud" style="display:none;position:fixed;top:12px;left:50%;transform:translateX(-50%);background:rgba(10,18,36,0.92);border:1.5px solid #00f0ff;color:#00f0ff;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:bold;z-index:2147483645;pointer-events:none;white-space:nowrap;"></div>
+      <div id="stModal" style="display:none;position:fixed;inset:0;background:rgba(4,8,20,0.9);align-items:center;justify-content:center;z-index:2147483647;font-family:sans-serif;color:#fff;">
+        <div style="width:90%;max-width:440px;background:#0f172a;border:2px solid #00f0ff;border-radius:14px;padding:20px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            <div id="stAva" style="font-size:32px;">👩‍🚀</div>
+            <div>
+              <div id="stTitle" style="font-size:13px;color:#00f0ff;font-weight:bold;"></div>
+              <div id="stSpk" style="font-size:16px;font-weight:bold;"></div>
+            </div>
+          </div>
+          <div id="stTxt" style="font-size:15px;line-height:1.6;background:rgba(0,0,0,0.4);padding:12px;border-radius:8px;border-left:3px solid #00f0ff;margin-bottom:16px;"></div>
+          <div id="stList" style="margin-bottom:12px;"></div>
+          <button id="stBtn1" style="width:100%;padding:12px;border:none;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer;background:linear-gradient(90deg,#00c6ff,#0072ff);color:#fff;"></button>
+          <button id="stBtn2" style="display:none;width:100%;padding:10px;margin-top:8px;border:1px solid #475569;border-radius:8px;font-size:14px;cursor:pointer;background:transparent;color:#cbd5e1;">返回主選單</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(uiWrap);
+
+    const stHud = document.getElementById('stHud');
+    const stModal = document.getElementById('stModal');
+
+    function getUnlocked() {
+      try { return Math.max(1, parseInt(localStorage.getItem(SAVE_KEY) || "1", 10)); } catch (e) { return 1; }
+    }
+    function setUnlocked(n) {
+      try { if (n > getUnlocked()) localStorage.setItem(SAVE_KEY, String(Math.min(STORY_CHAPTERS.length, n))); } catch (e) {}
     }
 
-    function saveUnlockedChapter(chNum) {
-      try {
-        if (chNum > getUnlockedChapter()) {
-          localStorage.setItem(STORY_SAVE_KEY, String(Math.min(STORY_CHAPTERS.length, chNum)));
+    function openMenu() {
+      isModalOpen = true;
+      const unlocked = getUnlocked();
+      document.getElementById('stAva').textContent = "📖";
+      document.getElementById('stTitle').textContent = "ENDLESS VOID CAMPAIGN";
+      document.getElementById('stSpk').textContent = "星際遠征：選擇故事章節";
+      document.getElementById('stTxt').style.display = "none";
+      const list = document.getElementById('stList');
+      list.style.display = "block";
+      list.innerHTML = "";
+
+      STORY_CHAPTERS.forEach((c, i) => {
+        const locked = c.id > unlocked;
+        const row = document.createElement('div');
+        row.style.cssText = `padding:12px;margin-bottom:8px;border-radius:8px;border:1px solid ${locked ? '#334155' : '#00f0ff'};background:rgba(255,255,255,0.05);cursor:${locked ? 'not-allowed' : 'pointer'};opacity:${locked ? '0.45' : '1'};display:flex;justify-content:space-between;`;
+        row.innerHTML = `<span>${locked ? '🔒' : '🚀'} ${c.title}</span><span style="color:#00f0ff;font-size:13px;">${locked ? '未解鎖' : '出擊 ▶'}</span>`;
+        if (!locked) {
+          row.onclick = () => startChapter(i);
         }
-      } catch (e) {}
-    }
-
-    // 1. 建立故事模式專屬透明覆蓋畫布（用來畫隕石、雷射警告區、故事專屬大 Boss 與血條）
-    const fxCanvas = document.createElement("canvas");
-    fxCanvas.id = "storyFxCanvas";
-    fxCanvas.style.cssText = "position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:8500;";
-    document.body.appendChild(fxCanvas);
-    const fxCtx = fxCanvas.getContext("2d");
-
-    function resizeFxCanvas() {
-      fxCanvas.width = window.innerWidth;
-      fxCanvas.height = window.innerHeight;
-    }
-    window.addEventListener("resize", resizeFxCanvas);
-    resizeFxCanvas();
-
-    // 2. UI 樣式與視窗
-    const styleEl = document.createElement("style");
-    styleEl.textContent = `
-      #storyOverlay, #storyChapterModal, #storyFailModal {
-        position: fixed; inset: 0; background: rgba(4, 8, 20, 0.9);
-        display: flex; align-items: center; justify-content: center;
-        z-index: 9999; font-family: system-ui, -apple-system, sans-serif; color: #fff;
-      }
-      #storyOverlay.hidden, #storyChapterModal.hidden, #storyFailModal.hidden, #storyHudBadge.hidden { display: none !important; }
-      .story-box {
-        width: 90%; max-width: 460px; background: linear-gradient(145deg, #0d172a, #162447);
-        border: 2px solid #00f0ff; border-radius: 14px; padding: 20px; text-align: left;
-      }
-      .story-box.fail-theme { background: linear-gradient(145deg, #240b12, #3b0d18); border-color: #ff3b5c; }
-      .story-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-      .story-avatar {
-        font-size: 32px; background: rgba(0, 240, 255, 0.15); border: 1px solid #00f0ff;
-        border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;
-      }
-      .fail-theme .story-avatar { background: rgba(255, 59, 92, 0.2); border-color: #ff3b5c; }
-      .story-title { font-size: 13px; color: #00f0ff; font-weight: bold; }
-      .fail-theme .story-title { color: #ff6b81; }
-      .story-speaker { font-size: 16px; font-weight: bold; color: #fff; margin-top: 2px; }
-      .story-text {
-        font-size: 15px; line-height: 1.6; color: #dbeafe; background: rgba(0, 0, 0, 0.4);
-        padding: 13px; border-radius: 8px; border-left: 3px solid #00f0ff; margin-bottom: 14px;
-      }
-      .fail-theme .story-text { color: #ffe4e6; border-left-color: #ff3b5c; }
-      .story-btn {
-        width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 16px;
-        font-weight: bold; cursor: pointer; background: linear-gradient(90deg, #00c6ff, #0072ff);
-        color: #fff; margin-top: 8px;
-      }
-      .story-btn.retry-btn { background: linear-gradient(90deg, #ff416c, #ff4b2b); }
-      .story-btn.secondary-btn { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.25); font-size: 14px; }
-      .chapter-item {
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 11px 14px; margin-bottom: 9px; border-radius: 8px;
-        background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(0, 240, 255, 0.3); cursor: pointer;
-      }
-      .chapter-item.locked { opacity: 0.45; cursor: not-allowed; border-color: #475569; }
-      #storyHudBadge {
-        position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
-        background: rgba(13, 23, 42, 0.92); border: 1px solid #00f0ff; color: #00f0ff;
-        padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: bold;
-        z-index: 9000; pointer-events: none; white-space: nowrap;
-      }
-    `;
-    document.head.appendChild(styleEl);
-
-    const hudBadge = document.createElement("div");
-    hudBadge.id = "storyHudBadge";
-    hudBadge.className = "hidden";
-    document.body.appendChild(hudBadge);
-
-    const storyOverlay = document.createElement("div");
-    storyOverlay.id = "storyOverlay";
-    storyOverlay.className = "hidden";
-    storyOverlay.innerHTML = `
-      <div class="story-box">
-        <div class="story-header">
-          <div class="story-avatar" id="storyAvatar">👩‍🚀</div>
-          <div>
-            <div class="story-title" id="storyChapterTitle">第一章</div>
-            <div class="story-speaker" id="storySpeaker">艦隊總部</div>
-          </div>
-        </div>
-        <div class="story-text" id="storyDialogueText"></div>
-        <button class="story-btn" id="storyActionBtn">開始出擊 🚀</button>
-      </div>
-    `;
-    document.body.appendChild(storyOverlay);
-
-    const storyFailModal = document.createElement("div");
-    storyFailModal.id = "storyFailModal";
-    storyFailModal.className = "hidden";
-    storyFailModal.innerHTML = `
-      <div class="story-box fail-theme">
-        <div class="story-header">
-          <div class="story-avatar">💥</div>
-          <div>
-            <div class="story-title" id="failChapterTitle">任務失敗</div>
-            <div class="story-speaker" id="failSpeaker">戰機已墜毀</div>
-          </div>
-        </div>
-        <div class="story-text" id="failDialogueText"></div>
-        <div id="failProgressStat" style="font-size:14px; color:#fda4af; font-weight:bold; margin-bottom:12px; text-align:center;"></div>
-        <button class="story-btn retry-btn" id="storyRetryBtn">🔄 重新挑戰本章</button>
-        <button class="story-btn secondary-btn" id="storyBackMenuBtn">🏠 返回主選單</button>
-      </div>
-    `;
-    document.body.appendChild(storyFailModal);
-
-    const chapterModal = document.createElement("div");
-    chapterModal.id = "storyChapterModal";
-    chapterModal.className = "hidden";
-    chapterModal.innerHTML = `
-      <div class="story-box">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-          <div style="font-size:18px; font-weight:bold; color:#00f0ff;">📖 星際遠征：獨立戰役章節</div>
-          <button id="closeStoryModalBtn" style="background:none; border:none; color:#94a3b8; font-size:20px; cursor:pointer;">✕</button>
-        </div>
-        <div id="storyChapterList"></div>
-      </div>
-    `;
-    document.body.appendChild(chapterModal);
-
-    function injectStoryButton() {
-      if (document.getElementById("openStoryModeBtn")) return;
-      const startScreen = document.getElementById("startScreen");
-      if (!startScreen) return;
-
-      const btn = document.createElement("button");
-      btn.id = "openStoryModeBtn";
-      btn.textContent = "📖 故事戰役 / STORY MODE";
-      btn.style.cssText = `
-        display: block; width: 260px; margin: 12px auto; padding: 12px 18px;
-        font-size: 16px; font-weight: bold; color: #fff; cursor: pointer;
-        background: linear-gradient(90deg, #7928ca, #ff0080);
-        border: 2px solid rgba(255,255,255,0.4); border-radius: 10px; letter-spacing: 1px;
-      `;
-      btn.onclick = (e) => { e.stopPropagation(); openChapterSelect(); };
-
-      const firstBtn = startScreen.querySelector("button");
-      if (firstBtn && firstBtn.parentNode) {
-        firstBtn.parentNode.insertBefore(btn, firstBtn.nextSibling);
-      } else {
-        startScreen.appendChild(btn);
-      }
-    }
-
-    function openChapterSelect() {
-      const listEl = document.getElementById("storyChapterList");
-      const unlocked = getUnlockedChapter();
-      listEl.innerHTML = "";
-
-      const modeLabels = {
-        METEOR_STORM: "特殊環境：隕石暴雨｜擊破 25 架敵機",
-        SOLAR_WIND: "特殊環境：太陽風磁場｜擊破 45 架敵機",
-        STORY_BOSS_1: "專屬首領戰：摧毀薩羅斯巨型母艦",
-        SURVIVAL_60S: "限時生存戰：高能雷射網撐過 60 秒",
-        FINAL_BOSS: "最終決戰：擊敗雙形態虛空之主"
-      };
-
-      STORY_CHAPTERS.forEach((ch, idx) => {
-        const isLocked = ch.id > unlocked;
-        const item = document.createElement("div");
-        item.className = "chapter-item" + (isLocked ? " locked" : "");
-        item.innerHTML = `
-          <div>
-            <div style="font-weight:bold; font-size:15px;">${isLocked ? "🔒 " : "🚀 "}${ch.title}</div>
-            <div style="font-size:12px; color:#38bdf8; margin-top:3px;">${modeLabels[ch.modeType]}</div>
-          </div>
-          <div style="font-size:13px; color:${isLocked ? '#64748b' : '#00f0ff'}; font-weight:bold;">
-            ${isLocked ? "未解鎖" : (ch.id < unlocked ? "已通關 ★" : "出擊 ▶")}
-          </div>
-        `;
-        if (!isLocked) {
-          item.onclick = (e) => {
-            e.stopPropagation();
-            chapterModal.classList.add("hidden");
-            launchStoryMode(idx);
-          };
-        }
-        listEl.appendChild(item);
+        list.appendChild(row);
       });
 
-      chapterModal.classList.remove("hidden");
+      const b1 = document.getElementById('stBtn1');
+      b1.textContent = "關閉視窗";
+      b1.onclick = () => { stModal.style.display = "none"; isModalOpen = false; };
+      document.getElementById('stBtn2').style.display = "none";
+      stModal.style.display = "flex";
     }
 
-    document.getElementById("closeStoryModalBtn").onclick = (e) => {
-      e.stopPropagation();
-      chapterModal.classList.add("hidden");
-    };
+    function showDialog(title, spk, ava, text, btnText, onBtn, showMenuBtn) {
+      isModalOpen = true;
+      document.getElementById('stAva').textContent = ava;
+      document.getElementById('stTitle').textContent = title;
+      document.getElementById('stSpk').textContent = spk;
+      const txt = document.getElementById('stTxt');
+      txt.style.display = "block";
+      txt.textContent = text;
+      document.getElementById('stList').style.display = "none";
 
-    function showBriefing(ch, isOutro, onConfirm) {
-      isBriefingOpen = true;
-      document.getElementById("storyAvatar").textContent = ch.avatar;
-      document.getElementById("storyChapterTitle").textContent = ch.title;
-      document.getElementById("storySpeaker").textContent = ch.speaker;
-      document.getElementById("storyDialogueText").textContent = isOutro ? ch.outro : ch.intro;
+      const b1 = document.getElementById('stBtn1');
+      b1.textContent = btnText;
+      b1.onclick = () => { stModal.style.display = "none"; isModalOpen = false; onBtn(); };
 
-      const actionBtn = document.getElementById("storyActionBtn");
-      actionBtn.textContent = isOutro
-        ? (ch.id < STORY_CHAPTERS.length ? "進入下一章戰役 ▶" : "凱旋返回主選單 🏆")
-        : "開始出擊 🚀";
-
-      storyOverlay.classList.remove("hidden");
-      actionBtn.onclick = (e) => {
-        e.stopPropagation();
-        storyOverlay.classList.add("hidden");
-        isBriefingOpen = false;
-        onConfirm();
-      };
-    }
-
-    function showFailScreen(ch, reasonText) {
-      hudBadge.classList.add("hidden");
-      hazards = [];
-      storyBoss = null;
-      storyBossBullets = [];
-      const gameOverScreen = document.getElementById("gameOverScreen");
-      if (gameOverScreen) gameOverScreen.classList.add("hidden");
-
-      document.getElementById("failChapterTitle").textContent = `❌ 任務失敗｜${ch.title}`;
-      document.getElementById("failSpeaker").textContent = ch.speaker;
-      document.getElementById("failDialogueText").textContent = ch.fail;
-      document.getElementById("failProgressStat").textContent = reasonText;
-
-      storyFailModal.classList.remove("hidden");
-
-      document.getElementById("storyRetryBtn").onclick = (e) => {
-        e.stopPropagation();
-        storyFailModal.classList.add("hidden");
-        launchStoryMode(currentChapterIndex);
-      };
-
-      document.getElementById("storyBackMenuBtn").onclick = (e) => {
-        e.stopPropagation();
-        storyFailModal.classList.add("hidden");
-        isStoryMode = false;
-        isBriefingOpen = false;
-        if (typeof state !== "undefined") state = "START";
-        const startScreen = document.getElementById("startScreen");
-        if (startScreen) startScreen.classList.remove("hidden");
-      };
-    }
-
-    function setupChapterMechanics(ch) {
-      chapterKills = 0;
-      lastScore = 0;
-      chapterStartTime = Date.now();
-      hazards = [];
-      storyBoss = null;
-      storyBossBullets = [];
-
-      // 若是 Boss 戰章節，生成專屬巨型故事 Boss
-      if (ch.modeType === "STORY_BOSS_1" || ch.modeType === "FINAL_BOSS") {
-        storyBoss = {
-          x: fxCanvas.width / 2,
-          y: 130,
-          vx: ch.modeType === "FINAL_BOSS" ? 2.8 : 2.0,
-          radius: ch.modeType === "FINAL_BOSS" ? 56 : 48,
-          hp: ch.bossMaxHp,
-          maxHp: ch.bossMaxHp,
-          name: ch.bossName,
-          isFinal: ch.modeType === "FINAL_BOSS",
-          shootTimer: 0
+      const b2 = document.getElementById('stBtn2');
+      if (showMenuBtn) {
+        b2.style.display = "block";
+        b2.onclick = () => {
+          stModal.style.display = "none";
+          isModalOpen = false;
+          isStoryActive = false;
+          stHud.style.display = "none";
+          meteors = [];
+          bossObj = null;
+          const ss = document.getElementById('startScreen');
+          if (ss) ss.classList.remove('hidden');
         };
+      } else {
+        b2.style.display = "none";
       }
+      stModal.style.display = "flex";
     }
 
-    function launchStoryMode(idx) {
-      isStoryMode = true;
-      isBriefingOpen = true;
-      currentChapterIndex = idx;
-      chapterClearedTriggered = false;
-      chapterFailedTriggered = false;
-
-      const startScreen = document.getElementById("startScreen");
-      if (startScreen) startScreen.classList.add("hidden");
-
+    function startChapter(idx) {
+      chIdx = idx;
+      isStoryActive = true;
       const ch = STORY_CHAPTERS[idx];
-      showBriefing(ch, false, () => {
-        isStoryMode = true;
-        if (typeof startGame === "function") startGame();
-        setupChapterMechanics(ch);
-        hudBadge.classList.remove("hidden");
-      });
+      const ss = document.getElementById('startScreen');
+      if (ss) ss.classList.add('hidden');
+
+      showDialog(ch.title, ch.speaker, ch.avatar, ch.intro, "開始出擊 🚀", () => {
+        isStoryActive = true;
+        kills = 0;
+        prevScore = 0;
+        startTime = Date.now();
+        meteors = [];
+        bossObj = ch.mode === "BOSS" ? { x: overlayCanvas.width / 2, y: 120, vx: 2.5, r: 46, hp: ch.bossHp, maxHp: ch.bossHp } : null;
+        if (typeof startGame === 'function') startGame();
+        stHud.style.display = "block";
+      }, false);
     }
 
-    document.addEventListener("click", (e) => {
-      const clickedStartBtn = e.target && e.target.closest("#startScreen button");
-      if (clickedStartBtn && clickedStartBtn.id !== "openStoryModeBtn" && !isBriefingOpen) {
-        isStoryMode = false;
-        hazards = [];
-        storyBoss = null;
-        storyBossBullets = [];
-        hudBadge.classList.add("hidden");
-      }
-    }, true);
+    // 注入按鈕
+    function ensureButton() {
+      if (document.getElementById('openStoryModeBtn')) return;
+      const ss = document.getElementById('startScreen');
+      if (!ss) return;
+      const btn = document.createElement('button');
+      btn.id = 'openStoryModeBtn';
+      btn.textContent = '📖 故事戰役 / STORY MODE';
+      btn.style.cssText = 'display:block;width:260px;margin:12px auto;padding:12px;font-size:16px;font-weight:bold;color:#fff;background:linear-gradient(90deg,#7928ca,#ff0080);border:2px solid rgba(255,255,255,0.4);border-radius:10px;cursor:pointer;';
+      btn.onclick = (e) => { e.stopPropagation(); openMenu(); };
+      const first = ss.querySelector('button');
+      if (first && first.parentNode) first.parentNode.insertBefore(btn, first.nextSibling);
+      else ss.appendChild(btn);
+    }
 
-    // 3. 獨立戰役特效與機制主迴圈（渲染隕石、太陽風、專屬Boss、雷射網）
-    let tickCount = 0;
-    function updateAndRenderStoryEffects() {
-      fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+    // 單一主渲染與邏輯迴圈（不再堆疊多個 setInterval）
+    let frame = 0;
+    function masterLoop() {
+      ensureButton();
+      oCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
-      if (!isStoryMode || isBriefingOpen || typeof state === "undefined" || state !== "PLAYING") {
-        requestAnimationFrame(updateAndRenderStoryEffects);
-        return;
-      }
-
-      tickCount++;
-      const ch = STORY_CHAPTERS[currentChapterIndex];
-      const hasPlayer = (typeof player !== "undefined" && player && typeof player.x === "number");
-
-      // 【第一章機制：隕石暴雨】
-      if (ch.modeType === "METEOR_STORM") {
-        if (tickCount % 45 === 0) {
-          hazards.push({
-            type: "METEOR",
-            x: Math.random() * (fxCanvas.width - 60) + 30,
-            y: -40,
-            vy: 4.5 + Math.random() * 2.5,
-            r: 22 + Math.random() * 14
-          });
-        }
-        for (let i = hazards.length - 1; i >= 0; i--) {
-          const m = hazards[i];
-          m.y += m.vy;
-          // 繪製帶火尾的赤紅隕石
-          fxCtx.save();
-          fxCtx.fillStyle = "rgba(255, 80, 40, 0.25)";
-          fxCtx.beginPath();
-          fxCtx.arc(m.x, m.y - 18, m.r * 0.85, 0, Math.PI * 2);
-          fxCtx.fill();
-
-          fxCtx.fillStyle = "#dc2626";
-          fxCtx.strokeStyle = "#fca5a5";
-          fxCtx.lineWidth = 2;
-          fxCtx.beginPath();
-          fxCtx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
-          fxCtx.fill();
-          fxCtx.stroke();
-          fxCtx.restore();
-
-          // 碰撞檢測
-          if (hasPlayer && Math.hypot(player.x - m.x, player.y - m.y) < m.r + 14) {
-            if (typeof player.hp === "number") player.hp -= 25;
-            hazards.splice(i, 1);
-            continue;
-          }
-          if (m.y > fxCanvas.height + 50) hazards.splice(i, 1);
-        }
+      // iPad 戰機操控加速（不影響敵人）
+      if (isTouch && typeof player !== 'undefined' && player && typeof player.speed === 'number' && player.speed < 9) {
+        player.speed = 9;
       }
 
-      // 【第二章機制：太陽風磁場＋火力支援】
-      if (ch.modeType === "SOLAR_WIND") {
-        const windDir = Math.sin(tickCount * 0.02) * 1.4;
-        if (hasPlayer) {
-          player.x = Math.max(20, Math.min(fxCanvas.width - 20, player.x + windDir));
-        }
-        // 繪製宇宙氣流線條
-        fxCtx.strokeStyle = "rgba(56, 189, 248, 0.18)";
-        fxCtx.lineWidth = 2;
-        for (let k = 0; k < 6; k++) {
-          const wy = ((tickCount * 4 + k * 140) % fxCanvas.height);
-          fxCtx.beginPath();
-          fxCtx.moveTo(0, wy);
-          fxCtx.lineTo(fxCanvas.width, wy + windDir * 35);
-          fxCtx.stroke();
-        }
-      }
+      if (isStoryActive && !isModalOpen) {
+        frame++;
+        const ch = STORY_CHAPTERS[chIdx];
+        const px = (typeof player !== 'undefined' && player && typeof player.x === 'number') ? player.x : pointerX;
+        const py = (typeof player !== 'undefined' && player && typeof player.y === 'number') ? player.y : pointerY;
 
-      // 【第四章機制：核心反應爐限時生存＋高能雷射掃射區】
-      if (ch.modeType === "SURVIVAL_60S") {
-        if (tickCount % 260 === 0) {
-          const laneW = Math.min(130, fxCanvas.width * 0.26);
-          hazards.push({
-            type: "LASER",
-            x: Math.random() * (fxCanvas.width - laneW),
-            w: laneW,
-            timer: 130 // 前 80 幀警告，後 50 幀發射雷射
-          });
-        }
-        for (let i = hazards.length - 1; i >= 0; i--) {
-          const lz = hazards[i];
-          lz.timer--;
-          if (lz.timer > 50) {
-            // 紅色閃爍預警區
-            fxCtx.fillStyle = (Math.floor(lz.timer / 8) % 2 === 0) ? "rgba(255, 0, 60, 0.18)" : "rgba(255, 0, 60, 0.06)";
-            fxCtx.fillRect(lz.x, 0, lz.w, fxCanvas.height);
-            fxCtx.strokeStyle = "#ff3b5c";
-            fxCtx.strokeRect(lz.x, 0, lz.w, fxCanvas.height);
-          } else if (lz.timer > 0) {
-            // 正式雷射光束
-            fxCtx.fillStyle = "rgba(255, 40, 90, 0.65)";
-            fxCtx.fillRect(lz.x, 0, lz.w, fxCanvas.height);
-            if (hasPlayer && player.x > lz.x && player.x < lz.x + lz.w && tickCount % 10 === 0) {
-              if (typeof player.hp === "number") player.hp -= 15;
-            }
-          } else {
-            hazards.splice(i, 1);
-          }
-        }
-      }
+        // 檢測玩家陣亡（Game Over 畫面出現或血量 <= 0）
+        const goScreen = document.getElementById('gameOverScreen');
+        const isDead = (goScreen && !goScreen.classList.contains('hidden')) ||
+                       (typeof state !== 'undefined' && state === 'GAMEOVER') ||
+                       (typeof player !== 'undefined' && player && typeof player.hp === 'number' && player.hp <= 0);
 
-      // 【第三章 & 終章機制：故事專屬巨型 BOSS 戰】
-      if (storyBoss && storyBoss.hp > 0) {
-        // Boss 移動
-        storyBoss.x += storyBoss.vx;
-        if (storyBoss.x < storyBoss.radius + 30 || storyBoss.x > fxCanvas.width - storyBoss.radius - 30) {
-          storyBoss.vx *= -1;
+        if (isDead) {
+          if (goScreen) goScreen.classList.add('hidden');
+          stHud.style.display = "none";
+          meteors = [];
+          bossObj = null;
+          showDialog(`❌ 任務失敗｜${ch.title}`, ch.speaker, "💥", ch.fail, "🔄 重新挑戰本章", () => startChapter(chIdx), true);
+          requestAnimationFrame(masterLoop);
+          return;
         }
 
-        // Boss 發射專屬彈幕
-        storyBoss.shootTimer++;
-        const isEnraged = storyBoss.isFinal && (storyBoss.hp < storyBoss.maxHp * 0.5);
-        const interval = isEnraged ? 45 : 65;
-        if (storyBoss.shootTimer % interval === 0) {
-          const count = isEnraged ? 7 : 5;
-          for (let b = 0; b < count; b++) {
-            const angle = Math.PI * 0.25 + (Math.PI * 0.5) * (b / (count - 1));
-            storyBossBullets.push({
-              x: storyBoss.x,
-              y: storyBoss.y + storyBoss.radius * 0.6,
-              vx: Math.cos(angle) * 4.2,
-              vy: Math.sin(angle) * 4.2
+        // 1. 隕石生成與繪製（第一章 & 終章）
+        if (ch.mode === "METEOR" || ch.mode === "SURVIVE") {
+          if (frame % 38 === 0) {
+            meteors.push({
+              x: Math.random() * (overlayCanvas.width - 50) + 25,
+              y: -30,
+              vy: 4.5 + Math.random() * 2.5,
+              r: 22 + Math.random() * 12
             });
           }
-        }
+          for (let i = meteors.length - 1; i >= 0; i--) {
+            const m = meteors[i];
+            m.y += m.vy;
 
-        // 偵測玩家子彈擊中故事 Boss（透過分數增加或子彈座標判定）
-        if (typeof bullets !== "undefined" && Array.isArray(bullets)) {
-          for (let bi = bullets.length - 1; bi >= 0; bi--) {
-            const bul = bullets[bi];
-            if (bul && typeof bul.x === "number" && Math.hypot(bul.x - storyBoss.x, bul.y - storyBoss.y) < storyBoss.radius) {
-              storyBoss.hp -= 18;
-              bullets.splice(bi, 1);
+            // 繪製高對比赤紅燃燒隕石
+            oCtx.fillStyle = "rgba(255, 100, 30, 0.35)";
+            oCtx.beginPath();
+            oCtx.arc(m.x, m.y - 16, m.r * 0.9, 0, Math.PI * 2);
+            oCtx.fill();
+
+            oCtx.fillStyle = "#ef4444";
+            oCtx.strokeStyle = "#fef08a";
+            oCtx.lineWidth = 2.5;
+            oCtx.beginPath();
+            oCtx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
+            oCtx.fill();
+            oCtx.stroke();
+
+            // 撞擊玩家判定
+            if (Math.hypot(px - m.x, py - m.y) < m.r + 16) {
+              meteors.splice(i, 1);
+              if (typeof player !== 'undefined' && player && typeof player.hp === 'number') {
+                player.hp -= 35;
+              } else {
+                // 若主程式血量變數名稱不同，直接觸發任務失敗
+                stHud.style.display = "none";
+                meteors = [];
+                showDialog(`❌ 遭隕石擊毀｜${ch.title}`, ch.speaker, "💥", ch.fail, "🔄 重新挑戰本章", () => startChapter(chIdx), true);
+                requestAnimationFrame(masterLoop);
+                return;
+              }
+              continue;
             }
+            if (m.y > overlayCanvas.height + 40) meteors.splice(i, 1);
           }
         }
-        // 兼容保底：若遊戲子彈陣列名稱不同，每擊殺一隻小怪也會對 Boss 造成軌道砲支援傷害
-        if (typeof score === "number" && score > lastScore) {
-          storyBoss.hp -= 35;
-          lastScore = score;
+
+        // 2. 故事專屬巨型母艦 BOSS（第二章）
+        if (bossObj) {
+          bossObj.x += bossObj.vx;
+          if (bossObj.x < bossObj.r + 25 || bossObj.x > overlayCanvas.width - bossObj.r - 25) bossObj.vx *= -1;
+
+          oCtx.fillStyle = "#7c3aed";
+          oCtx.strokeStyle = "#ddd6fe";
+          oCtx.lineWidth = 4;
+          oCtx.beginPath();
+          oCtx.arc(bossObj.x, bossObj.y, bossObj.r, 0, Math.PI * 2);
+          oCtx.fill();
+          oCtx.stroke();
+
+          // Boss 血條
+          const bw = Math.min(300, overlayCanvas.width * 0.7);
+          const bx = (overlayCanvas.width - bw) / 2;
+          oCtx.fillStyle = "rgba(0,0,0,0.7)";
+          oCtx.fillRect(bx, 48, bw, 12);
+          oCtx.fillStyle = "#a855f7";
+          oCtx.fillRect(bx, 48, bw * Math.max(0, bossObj.hp / bossObj.maxHp), 12);
         }
 
-        // 繪製專屬 Boss 本體與頂部血條
-        fxCtx.save();
-        fxCtx.fillStyle = isEnraged ? "#be123c" : "#6d28d9";
-        fxCtx.strokeStyle = isEnraged ? "#fda4af" : "#c4b5fd";
-        fxCtx.lineWidth = 4;
-        fxCtx.beginPath();
-        fxCtx.arc(storyBoss.x, storyBoss.y, storyBoss.radius, 0, Math.PI * 2);
-        fxCtx.fill();
-        fxCtx.stroke();
+        // 3. 進度與過關檢測
+        if (typeof score === 'number' && score > prevScore) {
+          kills += 1;
+          prevScore = score;
+          if (bossObj) bossObj.hp -= 45; // 擊破護衛機同時重創 Boss 護盾
+        }
 
-        // 核心眼睛
-        fxCtx.fillStyle = "#facc15";
-        fxCtx.beginPath();
-        fxCtx.arc(storyBoss.x, storyBoss.y, storyBoss.radius * 0.35, 0, Math.PI * 2);
-        fxCtx.fill();
+        let cleared = false;
+        if (ch.mode === "METEOR") {
+          stHud.textContent = `${ch.title}｜隕石閃避＋擊破：${kills} / ${ch.target}`;
+          if (kills >= ch.target) cleared = true;
+        } else if (ch.mode === "BOSS" && bossObj) {
+          stHud.textContent = `${ch.title}｜母艦護盾：${Math.max(0, bossObj.hp)} / ${bossObj.maxHp}`;
+          if (bossObj.hp <= 0) cleared = true;
+        } else if (ch.mode === "SURVIVE") {
+          const left = Math.max(0, ch.target - Math.floor((Date.now() - startTime) / 1000));
+          stHud.textContent = `${ch.title}｜反應爐倒數：${left} 秒`;
+          if (left <= 0) cleared = true;
+        }
 
-        // Boss 專屬血條
-        const barW = Math.min(340, fxCanvas.width * 0.75);
-        const barX = (fxCanvas.width - barW) / 2;
-        const hpRatio = Math.max(0, storyBoss.hp / storyBoss.maxHp);
-        fxCtx.fillStyle = "rgba(0,0,0,0.7)";
-        fxCtx.fillRect(barX, 46, barW, 14);
-        fxCtx.fillStyle = isEnraged ? "#ff2a5f" : "#a855f7";
-        fxCtx.fillRect(barX, 46, barW * hpRatio, 14);
-        fxCtx.strokeStyle = "#fff";
-        fxCtx.lineWidth = 1.5;
-        fxCtx.strokeRect(barX, 46, barW, 14);
-        fxCtx.fillStyle = "#fff";
-        fxCtx.font = "bold 12px sans-serif";
-        fxCtx.textAlign = "center";
-        fxCtx.fillText(`${storyBoss.name} (${Math.max(0, Math.ceil(storyBoss.hp))} / ${storyBoss.maxHp})`, fxCanvas.width / 2, 74);
-        fxCtx.restore();
+        if (cleared) {
+          setUnlocked(ch.id + 1);
+          meteors = [];
+          bossObj = null;
+          stHud.style.display = "none";
+          showDialog(`★ 任務完成｜${ch.title}`, ch.speaker, ch.avatar, ch.outro,
+            chIdx + 1 < STORY_CHAPTERS.length ? "進入下一章 ▶" : "凱旋返回主選單 🏆",
+            () => {
+              if (chIdx + 1 < STORY_CHAPTERS.length) startChapter(chIdx + 1);
+              else {
+                isStoryActive = false;
+                const ss = document.getElementById('startScreen');
+                if (ss) ss.classList.remove('hidden');
+              }
+            }, false);
+        }
       }
 
-      // 更新並繪製 Boss 專屬彈幕
-      for (let i = storyBossBullets.length - 1; i >= 0; i--) {
-        const sb = storyBossBullets[i];
-        sb.x += sb.vx;
-        sb.y += sb.vy;
-        fxCtx.fillStyle = "#ff3b5c";
-        fxCtx.beginPath();
-        fxCtx.arc(sb.x, sb.y, 7, 0, Math.PI * 2);
-        fxCtx.fill();
-
-        if (hasPlayer && Math.hypot(player.x - sb.x, player.y - sb.y) < 16) {
-          if (typeof player.hp === "number") player.hp -= 15;
-          storyBossBullets.splice(i, 1);
-          continue;
-        }
-        if (sb.y > fxCanvas.height + 20 || sb.x < -20 || sb.x > fxCanvas.width + 20) {
-          storyBossBullets.splice(i, 1);
-        }
-      }
-
-      requestAnimationFrame(updateAndRenderStoryEffects);
+      requestAnimationFrame(masterLoop);
     }
-    requestAnimationFrame(updateAndRenderStoryEffects);
-
-    // 4. 章節勝負與任務進度檢查
-    setInterval(() => {
-      injectStoryButton();
-      if (!isStoryMode || isBriefingOpen || !storyFailModal.classList.contains("hidden")) return;
-      if (typeof state === "undefined") return;
-
-      const ch = STORY_CHAPTERS[currentChapterIndex];
-
-      // 玩家陣亡判定
-      const isPlayerDead = (state === "GAMEOVER") || (typeof player !== "undefined" && player && typeof player.hp === "number" && player.hp <= 0);
-      if (isPlayerDead && !chapterClearedTriggered && !chapterFailedTriggered) {
-        chapterFailedTriggered = true;
-        let failReason = `未達成目標：擊破 ${chapterKills} / ${ch.needKills || 0} 架`;
-        if (ch.modeType === "SURVIVAL_60S") {
-          const survived = Math.floor((Date.now() - chapterStartTime) / 1000);
-          failReason = `未撐過時間：堅持了 ${survived} / ${ch.surviveSeconds} 秒`;
-        } else if (storyBoss) {
-          failReason = `首領剩餘血量：${Math.max(0, Math.ceil(storyBoss.hp))} / ${storyBoss.maxHp}`;
-        }
-        showFailScreen(ch, failReason);
-        return;
-      }
-
-      if (state === "PLAYING" && storyOverlay.classList.contains("hidden")) {
-        if (typeof score === "number" && score > lastScore) {
-          chapterKills += 1;
-          lastScore = score;
-        }
-
-        let isCleared = false;
-        if (ch.modeType === "METEOR_STORM" || ch.modeType === "SOLAR_WIND") {
-          hudBadge.textContent = `${ch.title}｜擊破：${chapterKills} / ${ch.needKills}`;
-          if (chapterKills >= ch.needKills) isCleared = true;
-        } else if (ch.modeType === "SURVIVAL_60S") {
-          const elapsed = Math.floor((Date.now() - chapterStartTime) / 1000);
-          const left = Math.max(0, ch.surviveSeconds - elapsed);
-          hudBadge.textContent = `${ch.title}｜反應爐倒數：${left} 秒`;
-          if (left <= 0) isCleared = true;
-        } else if (ch.modeType === "STORY_BOSS_1" || ch.modeType === "FINAL_BOSS") {
-          hudBadge.textContent = `${ch.title}｜討伐專屬首領中`;
-          if (storyBoss && storyBoss.hp <= 0) isCleared = true;
-        }
-
-        if (isCleared && !chapterClearedTriggered) {
-          chapterClearedTriggered = true;
-          hazards = [];
-          storyBoss = null;
-          storyBossBullets = [];
-          saveUnlockedChapter(ch.id + 1);
-          if (typeof SoundEngine !== "undefined" && SoundEngine.playUpgrade) SoundEngine.playUpgrade();
-
-          const prevHp = (typeof player !== "undefined" && player) ? player.hp : null;
-          const guardTimer = setInterval(() => {
-            if (prevHp !== null && typeof player !== "undefined" && player) player.hp = prevHp;
-          }, 50);
-
-          showBriefing(ch, true, () => {
-            clearInterval(guardTimer);
-            if (currentChapterIndex + 1 < STORY_CHAPTERS.length) {
-              currentChapterIndex += 1;
-              chapterClearedTriggered = false;
-              setupChapterMechanics(STORY_CHAPTERS[currentChapterIndex]);
-            } else {
-              isStoryMode = false;
-              hudBadge.classList.add("hidden");
-              state = "START";
-              const startScreen = document.getElementById("startScreen");
-              if (startScreen) startScreen.classList.remove("hidden");
-            }
-          });
-        }
-      }
-    }, 200);
-
-    injectStoryButton();
+    requestAnimationFrame(masterLoop);
   })();
+</script>
 </script>
 </body>
 </html>
