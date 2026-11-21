@@ -1695,99 +1695,70 @@
 
     setInterval(function() {
       if (typeof state !== 'undefined' && state === 'PLAYING' && typeof player !== 'undefined' && player) {
-        // 1. 提高戰機基礎移動速度上限（解決按鍵或虛擬搖桿飛太慢）
-        if (typeof player.speed === 'number') {
-          if (basePlayerSpeed === null) {
-            basePlayerSpeed = player.speed;
-          }
-          const targetSpeed = basePlayerSpeed * SPEED_MULTIPLIER;
-          if (player.speed < targetSpeed) {
-            player.speed = targetSpeed;
-          }
-        }
-
-        // 2. 加快觸控目標點跟隨速度（若遊戲使用 targetX / targetY 平滑追蹤手指）
-        if (isTouchDevice && typeof player.targetX === 'number' && typeof player.x === 'number') {
-          player.x += (player.targetX - player.x) * 0.35;
-          if (typeof player.targetY === 'number' && typeof player.y === 'number') {
-            player.y += (player.targetY - player.y) * 0.35;
-          }
-        }
-      } else if (typeof state !== 'undefined' && (state === 'START' || state === 'GAMEOVER')) {
-        // 結束一局時重置基準速度記錄，避免下一局重複疊加
-        basePlayerSpeed = null;
-      }
-    }, 30);
-  })();
-</script><!-- === 星際遠征：故事模式外掛模組 v2（雙重過關偵測 + 第一章加長版） === -->
+</script><!-- === 星際遠征：故事模式外掛模組 v4（含專屬任務失敗畫面 + 防卡波數版） === -->
 <script>
   (function() {
-    // 1. 故事章節劇本（已拉長第一章：需推進至第 4 波 或 擊殺 35 架敵機）
+    // 1. 故事章節劇本設定
     const STORY_CHAPTERS = [
       {
         id: 1,
         title: "第一章：邊境警戒線",
-        startWave: 1,
-        targetWave: 4,
-        targetKills: 35,
+        needKills: 30,
         speaker: "艦隊總部・艾琳娜指揮官",
         avatar: "👩‍🚀",
-        intro: "「指揮官，第 7 星區邊境湧現大量虛空先遣艦隊！請堅守防線，推進至第 4 波（或擊破 35 架敵機）以建立前線據點！」",
-        outro: "「漂亮的防守！先遣艦隊已被全數殲滅，但雷達深處出現了更強大的敵軍訊號……」"
+        intro: "「指揮官，第 7 星區邊境湧現大量虛空先遣艦隊！請堅守防線，擊破 30 架敵機以建立前線據點！」",
+        outro: "「漂亮的防守！先遣艦隊已被全數殲滅，但雷達深處出現了更強大的敵軍訊號……」",
+        fail: "「戰機受損過重，防線已被突破！請重整旗鼓，再次挑戰清除邊境敵軍！」"
       },
       {
         id: 2,
         title: "第二章：小行星伏擊戰",
-        startWave: 4,
-        targetWave: 7,
-        targetKills: 50,
+        needKills: 75,
         speaker: "情報官・凱爾",
         avatar: "📡",
-        intro: "「警告！前方小行星帶隱藏了敵軍重裝火力網。請善用升級強化戰機，突破重圍推進至第 7 波！」",
-        outro: "「成功突破封鎖線！我們已經逼近虛空艦隊的外圍核心區了。」"
+        intro: "「警告！前方小行星帶隱藏了敵軍重裝火力網。請善用升級強化戰機，累計擊破 75 架敵機！」",
+        outro: "「成功突破封鎖線！我們已經逼近虛空艦隊的外圍核心區了。」",
+        fail: "「小行星帶的交叉火力太猛烈了……優先升級護盾與射速再試一次吧！」"
       },
       {
         id: 3,
         title: "第三章：深空巨獸",
-        startWave: 7,
-        targetWave: 10,
-        targetKills: 65,
+        needKills: 130,
         speaker: "虛空先鋒・薩羅斯",
         avatar: "👾",
-        intro: "「渺小的人類戰機，竟敢踏入無盡虛空……見識一下深空母艦的真正威力吧！（目標：突破第 10 波）」",
-        outro: "「不可能……我的裝甲竟然被擊穿了！但真正的主宰正在核心深處等著你……」"
+        intro: "「渺小的人類戰機，竟敢踏入無盡虛空……見識一下深空母艦的真正威力吧！（目標：累計擊破 130 架敵機）」",
+        outro: "「不可能……我的裝甲竟然被擊穿了！但真正的主宰正在核心深處等著你……」",
+        fail: "「哈哈哈哈！就憑這點火力也想挑戰深空艦隊？回去再練練吧！」"
       },
       {
         id: 4,
         title: "第四章：核心反應爐",
-        startWave: 10,
-        targetWave: 13,
-        targetKills: 80,
+        needKills: 200,
         speaker: "艦隊總部・艾琳娜指揮官",
         avatar: "👩‍🚀",
-        intro: "「我們已抵達敵軍能源中樞！敵方火力進入狂暴狀態，務必撐過第 13 波，切斷核心能源供應！」",
-        outro: "「核心反應爐已過載爆炸！通往最終王座的航道已經開啟！」"
+        intro: "「我們已抵達敵軍能源中樞！敵方火力進入狂暴狀態，務必累計擊破 200 架敵機切斷核心能源！」",
+        outro: "「核心反應爐已過載爆炸！通往最終王座的航道已經開啟！」",
+        fail: "「能源中樞的防衛系統太強大了，戰機已被迫緊急撤離！」"
       },
       {
         id: 5,
         title: "終章：無盡虛空之主",
-        startWave: 13,
-        targetWave: 16,
-        targetKills: 100,
+        needKills: 300,
         speaker: "虛空主宰・歐米茄",
         avatar: "👁️",
-        intro: "「一切終將歸於虛無。來吧，指揮官，在最終決戰中證明人類的意志！（最終目標：征服第 16 波）」",
-        outro: "「虛空裂縫已經閉合，銀河系恢復了和平！恭喜你完成《無盡虛空》全部故事章節！」"
+        intro: "「一切終將歸於虛無。來吧，指揮官，在最終決戰中證明人類的意志！（最終目標：累計擊破 300 架敵機）」",
+        outro: "「虛空裂縫已經閉合，銀河系恢復了和平！恭喜你完成《無盡虛空》全部故事章節！」",
+        fail: "「在無盡虛空面前，一切抵抗都是徒勞……準備好再戰一次了嗎？」"
       }
     ];
 
-    const STORY_SAVE_KEY = "endless_void_story_progress_v2";
+    const STORY_SAVE_KEY = "endless_void_story_progress_v4";
     let isStoryMode = false;
     let currentChapterIndex = 0;
     let chapterClearedTriggered = false;
-    let chapterStartScore = 0;
-    let estimatedChapterKills = 0;
-    let lastObservedScore = 0;
+    let chapterFailedTriggered = false;
+    let totalStoryKills = 0;
+    let lastScore = 0;
 
     function getUnlockedChapter() {
       try {
@@ -1800,57 +1771,76 @@
 
     function saveUnlockedChapter(chNum) {
       try {
-        const current = getUnlockedChapter();
-        if (chNum > current) {
+        if (chNum > getUnlockedChapter()) {
           localStorage.setItem(STORY_SAVE_KEY, String(Math.min(STORY_CHAPTERS.length, chNum)));
         }
       } catch (e) {}
     }
 
-    // 2. UI 樣式與視窗
+    // 2. 樣式定義（包含劇情視窗 + 紅色警告風格的任務失敗畫面）
     const styleEl = document.createElement("style");
     styleEl.textContent = `
-      #storyOverlay, #storyChapterModal {
+      #storyOverlay, #storyChapterModal, #storyFailModal {
         position: fixed; inset: 0; background: rgba(4, 8, 20, 0.88);
         display: flex; align-items: center; justify-content: center;
         z-index: 9999; font-family: system-ui, -apple-system, sans-serif; color: #fff;
         backdrop-filter: blur(6px);
       }
-      #storyOverlay.hidden, #storyChapterModal.hidden, #storyHudBadge.hidden { display: none !important; }
+      #storyOverlay.hidden, #storyChapterModal.hidden, #storyFailModal.hidden, #storyHudBadge.hidden { display: none !important; }
       .story-box {
-        width: 90%; max-width: 480px; background: linear-gradient(145deg, #0d172a, #162447);
-        border: 2px solid #00f0ff; border-radius: 14px; padding: 22px;
+        width: 90%; max-width: 460px; background: linear-gradient(145deg, #0d172a, #162447);
+        border: 2px solid #00f0ff; border-radius: 14px; padding: 20px;
         box-shadow: 0 0 28px rgba(0, 240, 255, 0.35); text-align: left;
+      }
+      .story-box.fail-theme {
+        background: linear-gradient(145deg, #240b12, #3b0d18);
+        border-color: #ff3b5c;
+        box-shadow: 0 0 32px rgba(255, 59, 92, 0.45);
       }
       .story-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
       .story-avatar {
-        font-size: 34px; background: rgba(0, 240, 255, 0.15); border: 1px solid #00f0ff;
-        border-radius: 50%; width: 54px; height: 54px; display: flex; align-items: center; justify-content: center;
+        font-size: 32px; background: rgba(0, 240, 255, 0.15); border: 1px solid #00f0ff;
+        border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;
       }
-      .story-title { font-size: 13px; color: #00f0ff; letter-spacing: 1px; font-weight: bold; }
-      .story-speaker { font-size: 17px; font-weight: bold; color: #fff; margin-top: 2px; }
+      .fail-theme .story-avatar {
+        background: rgba(255, 59, 92, 0.2); border-color: #ff3b5c;
+      }
+      .story-title { font-size: 13px; color: #00f0ff; font-weight: bold; }
+      .fail-theme .story-title { color: #ff6b81; }
+      .story-speaker { font-size: 16px; font-weight: bold; color: #fff; margin-top: 2px; }
       .story-text {
-        font-size: 15px; line-height: 1.65; color: #dbeafe; background: rgba(0, 0, 0, 0.35);
-        padding: 14px; border-radius: 8px; border-left: 3px solid #00f0ff; margin-bottom: 18px;
+        font-size: 15px; line-height: 1.6; color: #dbeafe; background: rgba(0, 0, 0, 0.38);
+        padding: 13px; border-radius: 8px; border-left: 3px solid #00f0ff; margin-bottom: 14px;
+      }
+      .fail-theme .story-text {
+        color: #ffe4e6; border-left-color: #ff3b5c;
       }
       .story-btn {
         width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 16px;
         font-weight: bold; cursor: pointer; background: linear-gradient(90deg, #00c6ff, #0072ff);
-        color: #fff; box-shadow: 0 4px 14px rgba(0, 114, 255, 0.4);
+        color: #fff; margin-top: 8px;
+      }
+      .story-btn.retry-btn {
+        background: linear-gradient(90deg, #ff416c, #ff4b2b);
+        box-shadow: 0 4px 14px rgba(255, 65, 108, 0.45);
+      }
+      .story-btn.secondary-btn {
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        font-size: 14px;
       }
       .chapter-item {
         display: flex; justify-content: space-between; align-items: center;
-        padding: 12px 14px; margin-bottom: 10px; border-radius: 8px;
+        padding: 11px 14px; margin-bottom: 9px; border-radius: 8px;
         background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(0, 240, 255, 0.3);
-        cursor: pointer; transition: 0.2s;
+        cursor: pointer;
       }
-      .chapter-item:hover:not(.locked) { background: rgba(0, 240, 255, 0.18); border-color: #00f0ff; }
       .chapter-item.locked { opacity: 0.45; cursor: not-allowed; border-color: #475569; }
       #storyHudBadge {
         position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
         background: rgba(13, 23, 42, 0.9); border: 1px solid #00f0ff; color: #00f0ff;
         padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: bold;
-        z-index: 9000; pointer-events: none; letter-spacing: 0.5px; white-space: nowrap;
+        z-index: 9000; pointer-events: none; white-space: nowrap;
       }
     `;
     document.head.appendChild(styleEl);
@@ -1860,6 +1850,7 @@
     hudBadge.className = "hidden";
     document.body.appendChild(hudBadge);
 
+    // 開場與過關通訊框
     const storyOverlay = document.createElement("div");
     storyOverlay.id = "storyOverlay";
     storyOverlay.className = "hidden";
@@ -1878,6 +1869,28 @@
     `;
     document.body.appendChild(storyOverlay);
 
+    // 任務失敗專屬畫面
+    const storyFailModal = document.createElement("div");
+    storyFailModal.id = "storyFailModal";
+    storyFailModal.className = "hidden";
+    storyFailModal.innerHTML = `
+      <div class="story-box fail-theme">
+        <div class="story-header">
+          <div class="story-avatar">💥</div>
+          <div>
+            <div class="story-title" id="failChapterTitle">任務失敗・MISSION FAILED</div>
+            <div class="story-speaker" id="failSpeaker">戰機已墜毀</div>
+          </div>
+        </div>
+        <div class="story-text" id="failDialogueText"></div>
+        <div id="failProgressStat" style="font-size:14px; color:#fda4af; font-weight:bold; margin-bottom:12px; text-align:center;"></div>
+        <button class="story-btn retry-btn" id="storyRetryBtn">🔄 重新挑戰本章</button>
+        <button class="story-btn secondary-btn" id="storyBackMenuBtn">🏠 返回主選單</button>
+      </div>
+    `;
+    document.body.appendChild(storyFailModal);
+
+    // 章節選擇視窗
     const chapterModal = document.createElement("div");
     chapterModal.id = "storyChapterModal";
     chapterModal.className = "hidden";
@@ -1892,7 +1905,6 @@
     `;
     document.body.appendChild(chapterModal);
 
-    // 3. 注入主畫面「故事模式」按鈕
     function injectStoryButton() {
       if (document.getElementById("openStoryModeBtn")) return;
       const startScreen = document.getElementById("startScreen");
@@ -1930,7 +1942,7 @@
         item.innerHTML = `
           <div>
             <div style="font-weight:bold; font-size:15px;">${isLocked ? "🔒 " : "🚀 "}${ch.title}</div>
-            <div style="font-size:12px; color:#94a3b8; margin-top:3px;">目標：突破第 ${ch.targetWave} 波 或 擊破 ${ch.targetKills} 敵機</div>
+            <div style="font-size:12px; color:#94a3b8; margin-top:3px;">任務目標：累計擊破 ${ch.needKills} 架敵機</div>
           </div>
           <div style="font-size:13px; color:${isLocked ? '#64748b' : '#00f0ff'}; font-weight:bold;">
             ${isLocked ? "未解鎖" : (ch.id < unlocked ? "已通關 ★" : "出擊 ▶")}
@@ -1939,7 +1951,7 @@
         if (!isLocked) {
           item.onclick = () => {
             chapterModal.classList.add("hidden");
-            startStoryChapter(idx);
+            launchStoryMode(idx);
           };
         }
         listEl.appendChild(item);
@@ -1952,10 +1964,7 @@
       chapterModal.classList.add("hidden");
     };
 
-    function showDialogue(ch, isOutro, onConfirm) {
-      if (typeof state !== "undefined" && state === "PLAYING") {
-        state = "PAUSED";
-      }
+    function showBriefing(ch, isOutro, onConfirm) {
       document.getElementById("storyAvatar").textContent = ch.avatar;
       document.getElementById("storyChapterTitle").textContent = ch.title;
       document.getElementById("storySpeaker").textContent = ch.speaker;
@@ -1963,7 +1972,7 @@
 
       const actionBtn = document.getElementById("storyActionBtn");
       actionBtn.textContent = isOutro
-        ? (ch.id < STORY_CHAPTERS.length ? "進入下一章 ▶" : "凱旋返回主選單 🏆")
+        ? (ch.id < STORY_CHAPTERS.length ? "繼續下一章戰役 ▶" : "凱旋返回主選單 🏆")
         : "開始出擊 🚀";
 
       storyOverlay.classList.remove("hidden");
@@ -1973,32 +1982,52 @@
       };
     }
 
-    function startStoryChapter(idx) {
+    function showFailScreen(ch) {
+      hudBadge.classList.add("hidden");
+      // 隱藏遊戲原本的 Game Over 視窗，改用專屬故事失敗畫面
+      const gameOverScreen = document.getElementById("gameOverScreen");
+      if (gameOverScreen) gameOverScreen.classList.add("hidden");
+
+      document.getElementById("failChapterTitle").textContent = `❌ 任務失敗｜${ch.title}`;
+      document.getElementById("failSpeaker").textContent = ch.speaker;
+      document.getElementById("failDialogueText").textContent = ch.fail;
+      document.getElementById("failProgressStat").textContent = `未達成目標：擊破進度 ${totalStoryKills} / ${ch.needKills} 架`;
+
+      storyFailModal.classList.remove("hidden");
+
+      document.getElementById("storyRetryBtn").onclick = () => {
+        storyFailModal.classList.add("hidden");
+        launchStoryMode(currentChapterIndex);
+      };
+
+      document.getElementById("storyBackMenuBtn").onclick = () => {
+        storyFailModal.classList.add("hidden");
+        isStoryMode = false;
+        if (typeof state !== "undefined") state = "START";
+        const startScreen = document.getElementById("startScreen");
+        if (startScreen) startScreen.classList.remove("hidden");
+      };
+    }
+
+    function launchStoryMode(idx) {
       isStoryMode = true;
       currentChapterIndex = idx;
       chapterClearedTriggered = false;
-      estimatedChapterKills = 0;
+      chapterFailedTriggered = false;
+      totalStoryKills = idx === 0 ? 0 : STORY_CHAPTERS[idx - 1].needKills;
+      lastScore = 0;
+
       const ch = STORY_CHAPTERS[idx];
-
-      if (typeof startGame === "function") {
-        startGame();
-      }
-      if (typeof wave !== "undefined") {
-        wave = ch.startWave;
-      }
-
-      lastObservedScore = typeof score === "number" ? score : 0;
-      chapterStartScore = lastObservedScore;
-
-      hudBadge.textContent = `${ch.title}｜進度：0 / ${ch.targetKills} 擊殺（或第 ${ch.targetWave} 波）`;
-      hudBadge.classList.remove("hidden");
-
-      showDialogue(ch, false, () => {
-        if (typeof state !== "undefined") state = "PLAYING";
+      showBriefing(ch, false, () => {
+        if (typeof startGame === "function") {
+          startGame();
+        }
+        hudBadge.textContent = `${ch.title}｜擊破進度：${totalStoryKills} / ${ch.needKills}`;
+        hudBadge.classList.remove("hidden");
       });
     }
 
-    // 4. 雙重條件即時追蹤（波數達標 OR 擊殺數達標，保證能順利進入下一章）
+    // 3. 即時監聽：達標過關 OR 未達標陣亡失敗
     setInterval(() => {
       injectStoryButton();
 
@@ -2016,31 +2045,44 @@
 
         const ch = STORY_CHAPTERS[currentChapterIndex];
 
-        if (state === "PLAYING") {
-          // 偵測分數跳動來精準累計本關擊殺敵機數量
-          if (typeof score === "number" && score > lastObservedScore) {
-            estimatedChapterKills += 1;
-            lastObservedScore = score;
+        // 偵測玩家在未完成擊殺目標前陣亡（GAMEOVER 或血量 <= 0）
+        const isPlayerDead = (state === "GAMEOVER") || (typeof player !== "undefined" && player && typeof player.hp === "number" && player.hp <= 0);
+        if (isPlayerDead && !chapterClearedTriggered && !chapterFailedTriggered) {
+          chapterFailedTriggered = true;
+          showFailScreen(ch);
+          return;
+        }
+
+        if (state === "PLAYING" && storyOverlay.classList.contains("hidden") && storyFailModal.classList.contains("hidden")) {
+          if (typeof score === "number" && score > lastScore) {
+            totalStoryKills += 1;
+            lastScore = score;
           }
 
-          const currentW = typeof wave === "number" ? wave : 1;
-          hudBadge.textContent = `${ch.title}｜擊殺 ${estimatedChapterKills}/${ch.targetKills} ｜波數 ${currentW}/${ch.targetWave}`;
+          hudBadge.textContent = `${ch.title}｜擊破進度：${totalStoryKills} / ${ch.needKills}`;
 
-          // 只要「波數達標」或「擊殺數達標」任一條件成立，且場上無殘留敵人（或已達上限），立刻過關！
-          const enemiesCount = (typeof enemies !== "undefined" && Array.isArray(enemies)) ? enemies.length : 0;
-          const waveDone = (currentW > ch.targetWave) || (currentW === ch.targetWave && enemiesCount === 0);
-          const killsDone = estimatedChapterKills >= ch.targetKills;
-
-          if ((waveDone || killsDone) && !chapterClearedTriggered) {
+          // 達到目標擊殺數 -> 過關
+          if (totalStoryKills >= ch.needKills && !chapterClearedTriggered) {
             chapterClearedTriggered = true;
             saveUnlockedChapter(ch.id + 1);
             if (typeof SoundEngine !== "undefined" && SoundEngine.playUpgrade) {
               SoundEngine.playUpgrade();
             }
 
-            showDialogue(ch, true, () => {
+            const prevHp = (typeof player !== "undefined" && player) ? player.hp : null;
+            const guardTimer = setInterval(() => {
+              if (prevHp !== null && typeof player !== "undefined" && player) {
+                player.hp = prevHp;
+              }
+            }, 50);
+
+            showBriefing(ch, true, () => {
+              clearInterval(guardTimer);
               if (currentChapterIndex + 1 < STORY_CHAPTERS.length) {
-                startStoryChapter(currentChapterIndex + 1);
+                currentChapterIndex += 1;
+                chapterClearedTriggered = false;
+                const nextCh = STORY_CHAPTERS[currentChapterIndex];
+                hudBadge.textContent = `${nextCh.title}｜擊破進度：${totalStoryKills} / ${nextCh.needKills}`;
               } else {
                 isStoryMode = false;
                 hudBadge.classList.add("hidden");
