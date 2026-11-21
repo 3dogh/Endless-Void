@@ -1650,33 +1650,34 @@
     syncGlobalLeaderboard();
 
     // ==========================================
-    // 三、獨立故事戰役系統（高層級強制渲染隕石 & 專屬 Boss）
+    // ==========================================
+    // 三、獨立故事戰役系統（護盾可擋隕石 + 第一章10敵機 + 退回主畫面自動清除HUD）
     // ==========================================
     const STORY_CHAPTERS = [
       {
-        id: 1, title: "第一章：邊境警戒線", mode: "METEOR", target: 25,
+        id: 1, title: "第一章：邊境警戒線", mode: "METEOR", target: 10,
         speaker: "艦隊總部・艾琳娜指揮官", avatar: "👩‍🚀",
-        intro: "「指揮官，第 7 星區正遭遇【赤紅隕石暴雨】！閃避落下的巨型隕石，並擊破 25 架敵機！」",
-        outro: "「漂亮的閃避！隕石帶與先遣隊已全數清除，準備進入下一星區！」",
-        fail: "「戰機被隕石擊中墜毀！注意閃避高溫赤紅隕石，再試一次！」"
+        intro: "「指揮官，第 7 星區邊境出現少量隕石與偵察機！善用護盾抵擋隕石，只需擊破 10 架敵機即可建立防線！」",
+        outro: "「漂亮的防守！偵察隊已全數清除，準備迎戰深空巨獸！」",
+        fail: "「戰機受損墜毀！記得拾取護盾道具抵擋隕石，再試一次！」"
       },
       {
-        id: 2, title: "第二章：深空巨獸", mode: "BOSS", bossHp: 900,
+        id: 2, title: "第二章：深空巨獸", mode: "BOSS", bossHp: 750,
         speaker: "虛空先鋒・薩羅斯", avatar: "👾",
         intro: "「見識一下【薩羅斯巨型母艦】的毀滅彈幕吧！（目標：摧毀母艦 BOSS）」",
         outro: "「不可能……核心裝甲竟然被擊穿了！但真正的主宰正在核心深處等著你……」",
         fail: "「在薩羅斯母艦的砲火面前，人類戰機根本不堪一擊！」"
       },
       {
-        id: 3, title: "終章：核心生存戰", mode: "SURVIVE", target: 45,
+        id: 3, title: "終章：核心生存戰", mode: "SURVIVE", target: 40,
         speaker: "虛空主宰・歐米茄", avatar: "👁️",
-        intro: "「核心反應爐已進入過載倒數！在密集隕石雨中撐過 45 秒即可封印虛空裂縫！」",
+        intro: "「核心反應爐已進入過載倒數！在隕石雨中撐過 40 秒即可封印虛空裂縫！」",
         outro: "「虛空裂縫已經徹底閉合，銀河系恢復了和平！恭喜通關全部故事戰役！」",
         fail: "「沒能撐過反應爐過載倒數……看準空隙閃避，再戰一次！」"
       }
     ];
 
-    const SAVE_KEY = "endless_void_story_v7";
+    const SAVE_KEY = "endless_void_story_v8";
     let isStoryActive = false;
     let isModalOpen = false;
     let chIdx = 0;
@@ -1686,7 +1687,6 @@
     let meteors = [];
     let bossObj = null;
 
-    // 使用最高 z-index 畫布確保絕對不會被遊戲畫面蓋住
     const overlayCanvas = document.createElement('canvas');
     overlayCanvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:2147483640;';
     document.body.appendChild(overlayCanvas);
@@ -1698,7 +1698,6 @@
     window.addEventListener('resize', syncSize);
     syncSize();
 
-    // 建立 UI
     const uiWrap = document.createElement('div');
     uiWrap.innerHTML = `
       <div id="stHud" style="display:none;position:fixed;top:12px;left:50%;transform:translateX(-50%);background:rgba(10,18,36,0.92);border:1.5px solid #00f0ff;color:#00f0ff;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:bold;z-index:2147483645;pointer-events:none;white-space:nowrap;"></div>
@@ -1722,6 +1721,16 @@
 
     const stHud = document.getElementById('stHud');
     const stModal = document.getElementById('stModal');
+
+    function resetStoryUI() {
+      isStoryActive = false;
+      isModalOpen = false;
+      meteors = [];
+      bossObj = null;
+      stHud.style.display = "none";
+      stHud.textContent = "";
+      oCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    }
 
     function getUnlocked() {
       try { return Math.max(1, parseInt(localStorage.getItem(SAVE_KEY) || "1", 10)); } catch (e) { return 1; }
@@ -1761,6 +1770,7 @@
 
     function showDialog(title, spk, ava, text, btnText, onBtn, showMenuBtn) {
       isModalOpen = true;
+      stHud.style.display = "none";
       document.getElementById('stAva').textContent = ava;
       document.getElementById('stTitle').textContent = title;
       document.getElementById('stSpk').textContent = spk;
@@ -1778,11 +1788,8 @@
         b2.style.display = "block";
         b2.onclick = () => {
           stModal.style.display = "none";
-          isModalOpen = false;
-          isStoryActive = false;
-          stHud.style.display = "none";
-          meteors = [];
-          bossObj = null;
+          resetStoryUI();
+          if (typeof state !== 'undefined') state = 'START';
           const ss = document.getElementById('startScreen');
           if (ss) ss.classList.remove('hidden');
         };
@@ -1805,13 +1812,12 @@
         prevScore = 0;
         startTime = Date.now();
         meteors = [];
-        bossObj = ch.mode === "BOSS" ? { x: overlayCanvas.width / 2, y: 120, vx: 2.5, r: 46, hp: ch.bossHp, maxHp: ch.bossHp } : null;
+        bossObj = ch.mode === "BOSS" ? { x: overlayCanvas.width / 2, y: 120, vx: 2.3, r: 46, hp: ch.bossHp, maxHp: ch.bossHp } : null;
         if (typeof startGame === 'function') startGame();
         stHud.style.display = "block";
       }, false);
     }
 
-    // 注入按鈕
     function ensureButton() {
       if (document.getElementById('openStoryModeBtn')) return;
       const ss = document.getElementById('startScreen');
@@ -1826,17 +1832,48 @@
       else ss.appendChild(btn);
     }
 
-    // 單一主渲染與邏輯迴圈（不再堆疊多個 setInterval）
+    // 護盾抵擋隕石輔助函數（支援數值護盾與布林護盾）
+    function absorbMeteorHitWithShield() {
+      if (typeof player === 'undefined' || !player) return false;
+      if (typeof player.shield === 'number' && player.shield > 0) {
+        player.shield = Math.max(0, player.shield - 35);
+        return true;
+      }
+      if (player.hasShield === true) {
+        player.hasShield = false;
+        return true;
+      }
+      if (typeof player.shieldTimer === 'number' && player.shieldTimer > 0) {
+        player.shieldTimer = 0;
+        return true;
+      }
+      if (typeof player.invulnerable === 'number' && player.invulnerable > 0) {
+        return true;
+      }
+      return false;
+    }
+
     let frame = 0;
     function masterLoop() {
       ensureButton();
       oCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
-      // iPad 戰機操控加速（不影響敵人）
+      // 只要主選單顯示中（玩家退回主頁面），強制隱藏第一章標題與進度條並清空隕石
+      const startScreenEl = document.getElementById('startScreen');
+      const isAtMainMenu = (startScreenEl && !startScreenEl.classList.contains('hidden')) ||
+                           (typeof state !== 'undefined' && (state === 'START' || state === 'MENU'));
+      if (isAtMainMenu && !isModalOpen) {
+        if (isStoryActive || stHud.style.display !== 'none') {
+          resetStoryUI();
+        }
+        requestAnimationFrame(masterLoop);
+        return;
+      }
+
       if (isTouch && typeof player !== 'undefined' && player && typeof player.speed === 'number' && player.speed < 9) {
         player.speed = 9;
       }
-        // 通用偵測：只要畫面上有升級卡片/彈窗顯示（不論 ID 叫什麼），或遊戲非進行中，立刻凍結隕石
+
       const hasVisiblePopup = Array.from(document.querySelectorAll('div')).some(el => {
         if (el.id === 'stHud' || el.id === 'stModal' || el.id === 'startScreen' || el.id === 'gameOverScreen') return false;
         const style = window.getComputedStyle(el);
@@ -1852,7 +1889,6 @@
         const px = (typeof player !== 'undefined' && player && typeof player.x === 'number') ? player.x : pointerX;
         const py = (typeof player !== 'undefined' && player && typeof player.y === 'number') ? player.y : pointerY;
 
-        // 檢測玩家陣亡（Game Over 畫面出現或血量 <= 0）
         const goScreen = document.getElementById('gameOverScreen');
         const isDead = (goScreen && !goScreen.classList.contains('hidden')) ||
                        (typeof state !== 'undefined' && state === 'GAMEOVER') ||
@@ -1868,24 +1904,24 @@
           return;
         }
 
-        // 1. 隕石生成與繪製（第一章 & 終章）
+        // 1. 隕石生成與繪製（第一章降速減量，並支援護盾抵擋）
         if (ch.mode === "METEOR" || ch.mode === "SURVIVE") {
-          if (frame % 38 === 0) {
+          const spawnRate = ch.mode === "METEOR" ? 75 : 45; // 第一章大幅減少隕石數量
+          if (frame % spawnRate === 0) {
             meteors.push({
               x: Math.random() * (overlayCanvas.width - 50) + 25,
               y: -30,
-              vy: 4.5 + Math.random() * 2.5,
-              r: 22 + Math.random() * 12
+              vy: ch.mode === "METEOR" ? (3.0 + Math.random() * 1.5) : (4.2 + Math.random() * 2.0),
+              r: 20 + Math.random() * 10
             });
           }
           for (let i = meteors.length - 1; i >= 0; i--) {
             const m = meteors[i];
             m.y += m.vy;
 
-            // 繪製高對比赤紅燃燒隕石
             oCtx.fillStyle = "rgba(255, 100, 30, 0.35)";
             oCtx.beginPath();
-            oCtx.arc(m.x, m.y - 16, m.r * 0.9, 0, Math.PI * 2);
+            oCtx.arc(m.x, m.y - 14, m.r * 0.9, 0, Math.PI * 2);
             oCtx.fill();
 
             oCtx.fillStyle = "#ef4444";
@@ -1896,18 +1932,20 @@
             oCtx.fill();
             oCtx.stroke();
 
-            // 撞擊玩家判定
-            if (Math.hypot(px - m.x, py - m.y) < m.r + 16) {
+            if (Math.hypot(px - m.x, py - m.y) < m.r + 14) {
               meteors.splice(i, 1);
-              if (typeof player !== 'undefined' && player && typeof player.hp === 'number') {
-                player.hp -= 35;
-              } else {
-                // 若主程式血量變數名稱不同，直接觸發任務失敗
-                stHud.style.display = "none";
-                meteors = [];
-                showDialog(`❌ 遭隕石擊毀｜${ch.title}`, ch.speaker, "💥", ch.fail, "🔄 重新挑戰本章", () => startChapter(chIdx), true);
-                requestAnimationFrame(masterLoop);
-                return;
+              // 優先檢查防禦盾是否擋下隕石！
+              const blocked = absorbMeteorHitWithShield();
+              if (!blocked) {
+                if (typeof player !== 'undefined' && player && typeof player.hp === 'number') {
+                  player.hp -= 25;
+                } else {
+                  stHud.style.display = "none";
+                  meteors = [];
+                  showDialog(`❌ 遭隕石擊毀｜${ch.title}`, ch.speaker, "💥", ch.fail, "🔄 重新挑戰本章", () => startChapter(chIdx), true);
+                  requestAnimationFrame(masterLoop);
+                  return;
+                }
               }
               continue;
             }
@@ -1915,7 +1953,7 @@
           }
         }
 
-        // 2. 故事專屬巨型母艦 BOSS（第二章）
+        // 2. 故事專屬巨型母艦 BOSS
         if (bossObj) {
           bossObj.x += bossObj.vx;
           if (bossObj.x < bossObj.r + 25 || bossObj.x > overlayCanvas.width - bossObj.r - 25) bossObj.vx *= -1;
@@ -1928,7 +1966,6 @@
           oCtx.fill();
           oCtx.stroke();
 
-          // Boss 血條
           const bw = Math.min(300, overlayCanvas.width * 0.7);
           const bx = (overlayCanvas.width - bw) / 2;
           oCtx.fillStyle = "rgba(0,0,0,0.7)";
@@ -1941,12 +1978,12 @@
         if (typeof score === 'number' && score > prevScore) {
           kills += 1;
           prevScore = score;
-          if (bossObj) bossObj.hp -= 45; // 擊破護衛機同時重創 Boss 護盾
+          if (bossObj) bossObj.hp -= 45;
         }
 
         let cleared = false;
         if (ch.mode === "METEOR") {
-          stHud.textContent = `${ch.title}｜隕石閃避＋擊破：${kills} / ${ch.target}`;
+          stHud.textContent = `${ch.title}｜擊破進度：${kills} / ${ch.target}`;
           if (kills >= ch.target) cleared = true;
         } else if (ch.mode === "BOSS" && bossObj) {
           stHud.textContent = `${ch.title}｜母艦護盾：${Math.max(0, bossObj.hp)} / ${bossObj.maxHp}`;
@@ -1967,7 +2004,7 @@
             () => {
               if (chIdx + 1 < STORY_CHAPTERS.length) startChapter(chIdx + 1);
               else {
-                isStoryActive = false;
+                resetStoryUI();
                 const ss = document.getElementById('startScreen');
                 if (ss) ss.classList.remove('hidden');
               }
