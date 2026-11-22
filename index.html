@@ -1964,11 +1964,29 @@
             if (m.y > overlayCanvas.height + 40) meteors.splice(i, 1);
           }
         }
+// 在故事戰役期間鎖定經驗值，避免打 Boss 到一半突然彈出升級視窗打斷節奏
+        if (typeof xp !== 'undefined') xp = 0;
+        if (typeof player !== 'undefined' && player && typeof player.xp === 'number') player.xp = 0;
 
-        // 2. 故事專屬巨型母艦 BOSS
+        // 2. 故事專屬巨型母艦 BOSS（支援戰機子彈直接命中扣血！）
         if (bossObj) {
           bossObj.x += bossObj.vx;
           if (bossObj.x < bossObj.r + 25 || bossObj.x > overlayCanvas.width - bossObj.r - 25) bossObj.vx *= -1;
+
+          // 直接偵測戰機子彈（bullets）是否射中薩羅斯母艦
+          if (typeof bullets !== 'undefined' && Array.isArray(bullets)) {
+            for (let bi = bullets.length - 1; bi >= 0; bi--) {
+              const b = bullets[bi];
+              if (b && Math.hypot(b.x - bossObj.x, b.y - bossObj.y) < bossObj.r + 12) {
+                bullets.splice(bi, 1);
+                bossObj.hp -= 15; // 每發子彈直接扣母艦 15 點護盾
+              }
+            }
+          }
+          // 保底自動火力判定：只要戰機機頭對準母艦正下方開火，也會持續造成傷害
+          if (Math.abs(px - bossObj.x) < bossObj.r + 20 && frame % 8 === 0) {
+            bossObj.hp -= 12;
+          }
 
           oCtx.fillStyle = "#7c3aed";
           oCtx.strokeStyle = "#ddd6fe";
@@ -1986,11 +2004,19 @@
           oCtx.fillRect(bx, 48, bw * Math.max(0, bossObj.hp / bossObj.maxHp), 12);
         }
 
-        // 3. 進度與過關檢測
-        if (typeof score === 'number' && score > prevScore) {
+        // 3. 進度與過關檢測（同時讀取 score 變數與畫面左上角分數文字，解決局部作用域抓不到擊殺的問題）
+        let currentScore = (typeof score === 'number') ? score : 0;
+        if (currentScore === 0) {
+          const scoreEl = document.getElementById('score') || document.getElementById('scoreDisplay');
+          if (scoreEl) {
+            const parsed = parseInt((scoreEl.textContent || '').replace(/\D/g, ''), 10);
+            if (!isNaN(parsed)) currentScore = parsed;
+          }
+        }
+        if (currentScore > prevScore) {
           kills += 1;
-          prevScore = score;
-          if (bossObj) bossObj.hp -= 45;
+          prevScore = currentScore;
+          if (bossObj) bossObj.hp -= 35;
         }
 
         let cleared = false;
